@@ -235,6 +235,16 @@ Each check in the config must have:
 - `fix` - Zero-arity function to repair (returns `{:ok, msg}`, `{:error, msg}`, or `:skipped`)
 - `fix_command` - Optional shell command hint for the user
 
+---
+
+## Project history
+
+This library was developed as part of a larger internal toolkit and extracted
+to open source in mid-2026. The single commit visible on `main` represents the
+OSS cut-over point — all the features shipped in `1.0.0` were built and tested
+before being made public. Subsequent releases (`1.0.1`, `1.1.0`, ...) will be
+tagged normally, providing a clean public history going forward.
+
 ## License
 
 MIT
