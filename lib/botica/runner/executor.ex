@@ -6,7 +6,7 @@ defmodule Botica.Runner.Executor do
   running them in parallel while respecting timeout constraints.
   """
 
-  alias Arrea.Parallel
+  alias Botica.Runner.Executor
   alias Botica.Check.Result
   alias Botica.Runner.Sequencer
   alias Botica.Types
@@ -124,7 +124,18 @@ defmodule Botica.Runner.Executor do
         run_sequential_with_short_circuit(checks, funs, false, false)
 
       true ->
-        raw_results = Parallel.run_sync(funs, ordered: true)
+        raw_results =
+          funs
+          |> Task.async_stream(fn fun -> fun.() end,
+            max_concurrency: length(funs),
+            timeout: timeout + 1_000,
+            ordered: true
+          )
+          |> Enum.map(fn
+            {:ok, result} -> result
+            {:exit, reason} -> {:error, %{error: reason}}
+          end)
+
         results = process_results(checks, raw_results)
         {:ok, results}
     end
@@ -196,29 +207,17 @@ defmodule Botica.Runner.Executor do
     |> Enum.with_index()
     |> Enum.map(fn {check, idx} ->
       case Enum.at(raw_results, idx) do
-        # Handle Arrea result format: ok: %{result: {:ok, actual_result}, exit_code: 0}
-        {:ok, %{result: {:ok, res}}} ->
-          res
-
-        # Handle Arrea result format: ok: %{result: actual_result, exit_code: 0}
-        {:ok, %{result: res}} when is_map(res) ->
-          res
-
-        # Handle error format from Arrea
-        {:error, %{error: exc}} ->
-          Result.from_exception(check, exc)
-
-        # Handle timeout format
-        {:error, %{error: :timeout, exit_code: _}} ->
-          Result.from_timeout(check, @default_timeout)
-
-        # Handle direct result format from our check function
         {:ok, result} when is_map(result) ->
           result
 
+        {:error, %{error: :timeout}} ->
+          Result.from_timeout(check, @default_timeout)
+
+        {:error, %{error: exc}} ->
+          Result.from_exception(check, exc)
+
         other ->
-          # Fallback for unexpected format
-          Result.build(check, :error, "unexpected result: #{inspect(other)}")
+          Result.build(check, :error, "unexpected: #{inspect(other)}")
       end
     end)
   end
