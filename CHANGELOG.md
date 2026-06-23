@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CHANGELOG.md, dialyzer_config, doc groups_for_modules in mix.exs.
 
 ### Changed
+- **i18n**: documented the existing English-only public surface under Project history and linked the 1.0.0 release to hex.pm.
 - `Botica.Runner.Executor.execute/2` now uses sequential short-circuit when `stop_on_first_error: true` or `continue_on_error: false` (parallel via Arrea otherwise).
 - Default per-check timeout is now applied when a check has `timeout: nil` (previously `Task.await(task, nil)` raised).
 
@@ -26,4 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2026-06-10
 
 ### Added
-- Initial release: health checks with timeout, batteries for PostgreSQL/Redis/Memory/Disk, structured results and summary.
+- Initial open source release: health checks with timeout, batteries for PostgreSQL/Redis/Memory/Disk, structured results and summary.
+
+[1.0.0]: https://hex.pm/packages/botica/1.0.0

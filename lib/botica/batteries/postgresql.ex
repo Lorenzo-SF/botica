@@ -56,7 +56,7 @@ defmodule Botica.Batteries.PostgreSQL do
     args = ["-h", host, "-p", to_string(port), "-U", user]
 
     case System.cmd("pg_isready", args, stderr_to_stdout: true) do
-      {"", 0} ->
+      {_output, 0} ->
         {:ok, "PostgreSQL is ready at #{host}:#{port}"}
 
       {output, _} ->
