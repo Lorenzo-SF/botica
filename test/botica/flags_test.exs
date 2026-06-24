@@ -45,7 +45,10 @@ defmodule Botica.FlagsTest do
     test "define/2 preserves created_at on redefinition" do
       Botica.Flags.define(:test_redef_persist_created, default: false)
       {:ok, first} = Botica.Flags.get(:test_redef_persist_created)
-      Process.sleep(10)
+      # Sleep 100ms (much longer than the typical clock resolution) so the
+      # system_time(:microsecond) timestamp is guaranteed to differ on
+      # any platform (some runners have 10–15 ms clock granularity).
+      Process.sleep(100)
       Botica.Flags.define(:test_redef_persist_created, default: true)
       {:ok, second} = Botica.Flags.get(:test_redef_persist_created)
       assert DateTime.compare(first.created_at, second.created_at) == :eq

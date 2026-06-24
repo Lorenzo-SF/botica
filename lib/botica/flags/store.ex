@@ -64,7 +64,7 @@ defmodule Botica.Flags.Store do
     @table
     |> :ets.tab2list()
     |> Enum.map(fn {_name, flag} -> flag end)
-    |> Enum.sort(&(&2.updated_at.compare(&1.updated_at) <= 0))
+    |> Enum.sort(fn a, b -> DateTime.compare(a.updated_at, b.updated_at) != :lt end)
   end
 
   @doc """
