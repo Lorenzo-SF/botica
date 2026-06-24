@@ -146,7 +146,7 @@ defmodule Botica.Flags do
           |> Keyword.take([:enabled, :rollout, :description, :default])
           |> Enum.into(%{})
 
-        Store.put(%{existing | updates})
+        Store.put(Map.merge(existing, updates))
 
       :error ->
         {:error, :not_found}
