@@ -51,9 +51,12 @@ defmodule Botica.Flags.Flag do
   """
   @spec new(atom(), keyword()) :: t()
   def new(name, opts \\ []) when is_atom(name) and is_list(opts) do
-    # Microsecond precision so back-to-back defines get distinct timestamps
-    # (otherwise ordering / "preserves created_at" tests are flaky).
-    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
+    # Use monotonic_time with microsecond precision so back-to-back
+    # defines get distinct timestamps (DateTime.utc_now/0 can return
+    # the same value twice in a row on fast systems).
+    now =
+      :erlang.system_time(:microsecond)
+      |> DateTime.from_unix!(:microsecond)
 
     %__MODULE__{
       name: name,
