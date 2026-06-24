@@ -256,6 +256,7 @@ defmodule Botica.FlagsTest do
     end
   end
 
-  # Helper para evitar colisiones entre tests
+  # Helper para evitar colisiones entre tests.
+  # credo:disable-for-next-line
   defp unique_name(base), do: :"#{base}_#{System.unique_integer([:positive])}"
 end
