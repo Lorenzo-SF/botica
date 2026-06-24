@@ -7,7 +7,6 @@ defmodule Botica.FlagsTest do
 
   use ExUnit.Case, async: false
 
-  alias Botica.Flags
   alias Botica.Flags.Flag
   alias Botica.Flags.Store
   alias Botica.Doctor

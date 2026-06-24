@@ -56,13 +56,15 @@ defmodule Botica.Flags.Store do
   end
 
   @doc """
-  Direct ETS read of all flags. Returns a list (may be empty).
+  Direct ETS read of all flags. Returns a list (may be empty), sorted
+  by `updated_at` descending so most recently touched flags appear first.
   """
   @spec all() :: [Botica.Flags.Flag.t()]
   def all do
     @table
     |> :ets.tab2list()
     |> Enum.map(fn {_name, flag} -> flag end)
+    |> Enum.sort_by(& &1.updated_at, {:desc, DateTime})
   end
 
   @doc """
