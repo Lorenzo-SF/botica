@@ -113,9 +113,10 @@ defmodule Botica.Flags.Store do
     fresh = %{
       flag
       | updated_at:
-          (:erlang.system_time(:microsecond)
-           |> DateTime.from_unix!(:microsecond))
+          :erlang.system_time(:microsecond)
+          |> DateTime.from_unix!(:microsecond)
     }
+
     :ets.insert(@table, {fresh.name, fresh})
     {:reply, :ok, %{state | writes: state.writes + 1}}
   end

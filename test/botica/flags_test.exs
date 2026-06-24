@@ -258,5 +258,9 @@ defmodule Botica.FlagsTest do
 
   # Helper para evitar colisiones entre tests
   defp unique_name(base),
-  do: (base |> Atom.to_string() |> Kernel.<>("_#{System.unique_integer([:positive])}")) |> :erlang.binary_to_existing_atom()
+    do:
+      base
+      |> Atom.to_string()
+      |> Kernel.<>("_#{System.unique_integer([:positive])}")
+      |> :erlang.binary_to_existing_atom()
 end
