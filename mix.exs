@@ -26,7 +26,11 @@ defmodule Botica.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      # Inicia el árbol de supervisión de Botica, incluyendo el GenServer
+      # de Flags (Botica.Flags.Store). Los consumidores pueden sobreescribir
+      # esto poniendo su propio módulo en Application.replace_env(:botica, :application_module, ...).
+      mod: {Botica.Application, []}
     ]
   end
 
@@ -46,6 +50,7 @@ defmodule Botica.MixProject do
       extras: ["README.md", "LICENSE.md"],
       groups_for_modules: [
         Core: [Botica, Botica.Doctor, Botica.Types],
+        Flags: [Botica.Flags, Botica.Flags.Flag, Botica.Flags.Store],
         Execution: [Botica.Runner.Executor, Botica.Runner.Sequencer],
         Checks: [Botica.Check.Result, Botica.Check.Behaviour],
         Batteries: [

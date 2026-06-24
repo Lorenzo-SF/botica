@@ -281,6 +281,97 @@ defmodule Botica.Doctor do
     Sequencer.sort(checks)
   end
 
+  # ---------------------------------------------------------------------------
+  # Flags diagnostic — extends the Doctor with a feature-flags section
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Returns a diagnostic snapshot of the current `Botica.Flags` registry.
+
+  Shape:
+
+      %{
+        count: 3,
+        flags: [
+          %{name: :beta_search, status: :enabled, default: true, rollout: nil},
+          %{name: :new_dashboard, status: :disabled, default: false, rollout: nil},
+          %{name: :rate_limiting, status: :rollout, default: false, rollout: 25}
+        ]
+      }
+
+  Intended to be printed by CLI / REPL wrappers as part of the botica
+  diagnostic banner. Safe to call when no flags are defined — returns an
+  empty list under `:flags`.
+  """
+  @spec flags_summary() :: %{
+          required(:count) => non_neg_integer(),
+          required(:flags) => [map()]
+        }
+  def flags_summary do
+    summary =
+      Botica.Flags.all()
+      |> Enum.map(fn flag ->
+        status =
+          cond do
+            flag.enabled and is_integer(flag.rollout) -> :rollout
+            flag.enabled -> :enabled
+            true -> :disabled
+          end
+
+        %{
+          name: flag.name,
+          status: status,
+          default: flag.default,
+          rollout: flag.rollout,
+          description: flag.description
+        }
+      end)
+
+    %{count: length(summary), flags: summary}
+  end
+
+  @doc """
+  Formats the `flags_summary/0` output as a human-readable string suitable
+  for the `delfos doctor`-style banners.
+
+  Returns an empty string when no flags are defined.
+
+  ## Example output
+
+      Flags (3 defined):
+        ✓ beta_search     enabled  (default: true)
+        ✗ new_dashboard   disabled (default: false)
+        ~ rate_limiting   rollout 25% (default: false)
+  """
+  @spec format_flags_summary() :: String.t()
+  def format_flags_summary do
+    case flags_summary() do
+      %{count: 0} ->
+        ""
+
+      %{count: count, flags: flags} ->
+        rows =
+          Enum.map_join(flags, "\n", fn flag ->
+            icon = icon_for(flag.status)
+            state = state_for(flag.status, flag.rollout)
+            default = "(default: #{flag.default})"
+            "  #{icon} #{pad(flag.name)}  #{pad(state)}  #{default}"
+          end)
+
+        "Flags (#{count} defined):\n#{rows}"
+    end
+  end
+
+  defp icon_for(:enabled), do: "✓"
+  defp icon_for(:disabled), do: "✗"
+  defp icon_for(:rollout), do: "~"
+
+  defp state_for(:rollout, pct) when is_integer(pct), do: "rollout #{pct}%"
+  defp state_for(:enabled, _), do: "enabled"
+  defp state_for(:disabled, _), do: "disabled"
+
+  defp pad(name), do: name |> Atom.to_string() |> String.pad_trailing(16)
+
   # Private functions
 
   defp validate_config(config) do

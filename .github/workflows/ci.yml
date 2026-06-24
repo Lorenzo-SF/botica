@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, cleanup/audit-and-i18n]
+    branches: [main, cleanup/audit-and-i18n, feature/flags-module]
   pull_request:
-    branches: [main, cleanup/audit-and-i18n]
+    branches: [main, cleanup/audit-and-i18n, feature/flags-module] 
 
 env:
   OTP_VERSION: "28.1"
@@ -13,7 +13,7 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Format + lint + security — fast feedback
+  # 1. Format + lint + security - fast feedback
   # ---------------------------------------------------------------------------
   lint:
     name: Lint & Security
@@ -47,7 +47,7 @@ jobs:
 
 
   # ---------------------------------------------------------------------------
-  # 2. Compile + test with coverage — main quality gate
+  # 2. Compile + test with coverage - main quality gate
   # ---------------------------------------------------------------------------
   test:
     name: Compile & Test
@@ -95,12 +95,12 @@ jobs:
           fi
 
   # ---------------------------------------------------------------------------
-  # 3. Dialyzer — slow, runs only on the main branch and main cleanup branch
+  # 3. Dialyzer - slow, runs only on the main branch and main cleanup branch
   # ---------------------------------------------------------------------------
   typespecs:
     name: Dialyzer
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cleanup/audit-and-i18n'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/cleanup/audit-and-i18n' || github.ref == 'refs/heads/feature/flags-module'
     steps:
       - uses: actions/checkout@v4
 
