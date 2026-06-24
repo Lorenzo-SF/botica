@@ -6,7 +6,6 @@ defmodule Botica.Runner.Executor do
   running them in parallel while respecting timeout constraints.
   """
 
-  alias Botica.Runner.Executor
   alias Botica.Check.Result
   alias Botica.Runner.Sequencer
   alias Botica.Types
