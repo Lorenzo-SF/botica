@@ -2,7 +2,7 @@
 
 All notable changes to Botica are documented in this file.
 
-## [1.1.0] — 2026-06-24
+## [0.2.0] — 2026-06-24
 
 ### Added
 
