@@ -107,8 +107,15 @@ defmodule Botica.Flags.Store do
   @impl true
   def handle_call({:put, %Botica.Flags.Flag{} = flag}, _from, state) do
     # Refresh updated_at on every write so introspection sees when the flag
-    # last changed state.
-    fresh = %{flag | updated_at: DateTime.utc_now() |> DateTime.truncate(:second)}
+    # last changed state. Use :erlang.system_time(:microsecond) so back-to-back
+    # writes within the same second still get distinct timestamps (DateTime.utc_now/0
+    # truncated to :second collides on fast systems).
+    fresh = %{
+      flag
+      | updated_at:
+          (:erlang.system_time(:microsecond)
+           |> DateTime.from_unix!(:microsecond))
+    }
     :ets.insert(@table, {fresh.name, fresh})
     {:reply, :ok, %{state | writes: state.writes + 1}}
   end

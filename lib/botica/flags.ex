@@ -225,7 +225,6 @@ defmodule Botica.Flags do
   @spec all() :: [Flag.t()]
   def all do
     Store.all()
-    |> Enum.sort_by(& &1.updated_at, {:desc, DateTime})
   end
 
   @doc """
