@@ -12,6 +12,11 @@ defmodule Botica.Runner.Executor do
 
   @default_timeout 30_000
 
+  # Cap Task.async_stream concurrency. Without this, a 1000-check
+  # config launches 1000 processes simultaneously and can exhaust
+  # schedulers / file descriptors / database connections.
+  @max_default_concurrency 32
+
   @doc """
   Executes all checks in parallel and returns structured results.
 
@@ -123,10 +128,12 @@ defmodule Botica.Runner.Executor do
         run_sequential_with_short_circuit(checks, funs, false, false)
 
       true ->
+        max_concurrency = min(length(funs), @max_default_concurrency)
+
         raw_results =
           funs
           |> Task.async_stream(fn fun -> fun.() end,
-            max_concurrency: length(funs),
+            max_concurrency: max_concurrency,
             timeout: timeout + 1_000,
             ordered: true
           )
