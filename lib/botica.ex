@@ -1,12 +1,28 @@
 defmodule Botica do
   @moduledoc """
-  Botica provides environment diagnostics and health checks.
+  Botica provides environment diagnostics, health checks, and feature flags.
 
-  ## Dependencies
+  ## Modules
 
-  Requires `:apero` and `:arrea` as dependencies.
+    * `Botica.Doctor` — run health checks, summarise, fix failures
+    * `Botica.Flags` — feature flags with ETS backend and per-entity rollouts
+    * `Botica.Flags.Store` — GenServer that owns the ETS table
+    * `Botica.Flags.Flag` — struct for a single flag
+    * `Botica.Runner.*`, `Botica.Check.*`, `Botica.Batteries.*` — internal pieces
 
-  ## Usage
+  ## Feature flags quick start
+
+      Botica.Flags.define(:new_dashboard, default: false)
+      Botica.Flags.define(:beta_search, default: true)
+      Botica.Flags.define(:rate_limiting, default: false, rollout: 25)
+
+      Botica.Flags.enabled?(:new_dashboard)               # false
+      Botica.Flags.enabled?(:rate_limiting, for: user)    # deterministic per user
+      Botica.Flags.enable(:new_dashboard)
+
+  See `Botica.Flags` for full API.
+
+  ## Diagnostics quick start
 
   Define a config with checks and use the Doctor module to run diagnostics:
 
@@ -34,6 +50,10 @@ defmodule Botica do
       # Quick health check
       result = Botica.health_check(config)
 
+      # Snapshot of feature flags
+      summary = Botica.Doctor.flags_summary()
+      banner = Botica.Doctor.format_flags_summary()
+
   ## Predefined Checks (Batteries)
 
   Botica includes predefined checks for common services:
@@ -55,6 +75,7 @@ defmodule Botica do
   - `Botica.fix/1` - Run fixes for failed checks, returns `{:ok, fix_report}`
   - `Botica.health_check/1` - Convenience wrapper returning pass/fail status
   - `Botica.batteries/0` - List available predefined checks
+  - `Botica.Flags.*` - Feature flag API
   - `Botica.Doctor` - Full module with detailed functions
   """
 
@@ -101,4 +122,19 @@ defmodule Botica do
   See `Botica.Doctor.validate/1` for full documentation.
   """
   defdelegate validate(config), to: Botica.Doctor, as: :validate
+
+  # ---------------------------------------------------------------------------
+  # Feature flags — see `Botica.Flags` for full documentation.
+  # ---------------------------------------------------------------------------
+
+  defdelegate define(name, opts \\ []), to: Botica.Flags
+  defdelegate enable(name), to: Botica.Flags
+  defdelegate disable(name), to: Botica.Flags
+  defdelegate set(name, opts), to: Botica.Flags
+  defdelegate delete(name), to: Botica.Flags
+  defdelegate enabled?(name), to: Botica.Flags
+  defdelegate enabled?(name, opts), to: Botica.Flags
+  defdelegate get(name), to: Botica.Flags
+  defdelegate all(), to: Botica.Flags
+  defdelegate count(), to: Botica.Flags
 end
