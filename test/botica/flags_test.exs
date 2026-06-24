@@ -7,10 +7,10 @@ defmodule Botica.FlagsTest do
 
   use ExUnit.Case, async: false
 
+  alias Botica.Doctor
   alias Botica.Flags
   alias Botica.Flags.Flag
   alias Botica.Flags.Store
-  alias Botica.Doctor
 
   setup do
     # Clear the ETS table so each test starts from an empty registry.
@@ -257,5 +257,6 @@ defmodule Botica.FlagsTest do
   end
 
   # Helper para evitar colisiones entre tests
-  defp unique_name(base), do: :"#{base}_#{System.unique_integer([:positive])}"
+  defp unique_name(base),
+  do: (base |> Atom.to_string() |> Kernel.<>("_#{System.unique_integer([:positive])}")) |> :erlang.binary_to_existing_atom()
 end
