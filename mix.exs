@@ -4,7 +4,7 @@ defmodule Botica.MixProject do
   def project do
     [
       app: :botica,
-      version: "1.0.0",
+      version: "0.2.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -26,7 +26,11 @@ defmodule Botica.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:logger],
+      # Inicia el árbol de supervisión de Botica, incluyendo el GenServer
+      # de Flags (Botica.Flags.Store). Los consumidores pueden sobreescribir
+      # esto poniendo su propio módulo en Application.replace_env(:botica, :application_module, ...).
+      mod: {Botica.Application, []}
     ]
   end
 
@@ -43,9 +47,13 @@ defmodule Botica.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "LICENSE.md"],
+      source_url: "https://github.com/Lorenzo-SF/botica",
+      homepage_url: "https://github.com/Lorenzo-SF/botica",
+      source_ref: "v0.1.0",
+      extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"],
       groups_for_modules: [
         Core: [Botica, Botica.Doctor, Botica.Types],
+        Flags: [Botica.Flags, Botica.Flags.Flag, Botica.Flags.Store],
         Execution: [Botica.Runner.Executor, Botica.Runner.Sequencer],
         Checks: [Botica.Check.Result, Botica.Check.Behaviour],
         Batteries: [

@@ -1,32 +1,39 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to Botica are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
+## [0.2.0] — 2026-06-24
 
 ### Added
-- **Executor `:stop_on_first_error` option**: halt execution at the first failing check. Takes precedence over `:continue_on_error`.
-- **Executor `:continue_on_error` option now respected**: previously the option existed in the type spec but was not consulted. Now `continue_on_error: false` stops at the first error.
-- 7 new tests in `test/botica/runner/executor_test.exs` covering both options.
-- Deps: arrea and apero from GitHub.
-- CHANGELOG.md, dialyzer_config, doc groups_for_modules in mix.exs.
 
-### Changed
-- **i18n**: documented the existing English-only public surface under Project history and linked the 1.0.0 release to hex.pm.
-- `Botica.Runner.Executor.execute/2` now uses sequential short-circuit when `stop_on_first_error: true` or `continue_on_error: false` (parallel via Arrea otherwise).
-- Default per-check timeout is now applied when a check has `timeout: nil` (previously `Task.await(task, nil)` raised).
+- `Botica.Flags` — feature flags with ETS backend and deterministic
+  per-entity rollouts. See `Botica.Flags` for full API.
+- `Botica.Flags.Store` — GenServer that owns the ETS table.
+- `Botica.Flags.Flag` — struct with timestamps + `Flag.new/2` factory
+  that clamps rollout to 0..100.
+- `Botica.Application` — new OTP application that starts the supervisor
+  tree (`Botica.Flags.Store`).
+- `Botica.Doctor.flags_summary/0` — `[:count, :flags]` snapshot.
+- `Botica.Doctor.format_flags_summary/0` — formatted banner for the
+  Doctor's diagnostic output:
+  ```
+  Flags (3 defined):
+    ✓ beta_search     enabled  (default: true)
+    ✗ new_dashboard   disabled (default: false)
+    ~ rate_limiting   rollout 25% (default: false)
+  ```
+- 12 defdelegates on the top-level `Botica` facade.
 
-### Removed
-- `Botica.Application` (the Task.Supervisor was never used; Executor manages its own tasks).
-- The dep on `mod: {Botica.Application, []}` in mix.exs.
-- The `:apero` and `:alaja` dep placeholders (Botica is a library, not a consumer of those).
+### Tests
 
-## [1.0.0] - 2026-06-10
+- 27 tests in `test/botica/flags_test.exs` covering define/enable/disable/
+  set/delete, rollout bucketing (deterministic, uniform distribution,
+  0% / 100% edges, `for:` ignored when rollout is nil), `all/0` sorting,
+  `count/0`, `Flag` struct (rollout clamping), and Doctor integration.
 
-### Added
-- Initial open source release: health checks with timeout, batteries for PostgreSQL/Redis/Memory/Disk, structured results and summary.
+### Notes
 
-[1.0.0]: https://hex.pm/packages/botica/1.0.0
+- Adds a new OTP application start. Existing consumers that included
+  `botica` as a dependency will now start the `Botica.Flags.Store`
+  GenServer automatically. Override `mod:` in your own `mix.exs` if
+  you need a custom supervisor tree.
