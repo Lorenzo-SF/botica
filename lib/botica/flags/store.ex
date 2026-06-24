@@ -38,6 +38,13 @@ defmodule Botica.Flags.Store do
   end
 
   @doc """
+  Returns the underlying ETS table name. Useful in tests for clearing the
+  registry between cases: `Store.table() |> :ets.delete_all_objects()`.
+  """
+  @spec table() :: :ets.tab()
+  def table, do: @table
+
+  @doc """
   Direct ETS read — no GenServer round-trip. Returns `{:ok, flag}` or `:error`.
   """
   @spec get(atom()) :: {:ok, Botica.Flags.Flag.t()} | :error

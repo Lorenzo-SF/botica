@@ -9,6 +9,16 @@ defmodule Botica.FlagsTest do
 
   alias Botica.Flags
   alias Botica.Flags.Flag
+  alias Botica.Flags.Store
+  alias Botica.Doctor
+
+  setup do
+    # Clear the ETS table so each test starts from an empty registry.
+    # Without this, `all/0` returns flags left over from previous tests
+    # in the same file, breaking ordering and counting tests.
+    Store.table() |> :ets.delete_all_objects()
+    :ok
+  end
 
   describe "define/2 + enabled?/1" do
     test "defines a flag and queries its value" do
@@ -200,7 +210,7 @@ defmodule Botica.FlagsTest do
       name = unique_name(:doctor_flags_summary)
       Botica.Flags.define(name, default: true)
 
-      summary = Botica.Doctor.flags_summary()
+      summary = Doctor.flags_summary()
       names = Enum.map(summary.flags, & &1.name)
       assert name in names
       assert summary.count >= 1
@@ -210,13 +220,13 @@ defmodule Botica.FlagsTest do
       # Even if other tests defined flags, this should produce something with at
       # least a header — if it returns "" that means the registry was empty.
       # We can't guarantee empty registry in shared state, so just assert shape:
-      result = Botica.Doctor.format_flags_summary()
+      result = Doctor.format_flags_summary()
       assert is_binary(result)
     end
 
     test "format_flags_summary/0 produces a banner with the count" do
       Botica.Flags.define(unique_name(:format_test), default: true)
-      banner = Botica.Doctor.format_flags_summary()
+      banner = Doctor.format_flags_summary()
       assert banner =~ ~r/Flags \(\d+ defined\):/
     end
   end

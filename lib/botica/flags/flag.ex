@@ -51,7 +51,9 @@ defmodule Botica.Flags.Flag do
   """
   @spec new(atom(), keyword()) :: t()
   def new(name, opts \\ []) when is_atom(name) and is_list(opts) do
-    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    # Microsecond precision so back-to-back defines get distinct timestamps
+    # (otherwise ordering / "preserves created_at" tests are flaky).
+    now = DateTime.utc_now() |> DateTime.truncate(:microsecond)
 
     %__MODULE__{
       name: name,

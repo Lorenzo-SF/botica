@@ -50,6 +50,7 @@ defmodule Botica.Doctor do
 
   alias Botica.Batteries.{Disk, Memory, PostgreSQL, Redis}
   alias Botica.Check.Result
+  alias Botica.Flags
   alias Botica.Repair.Fixer
   alias Botica.Runner.Executor
   alias Botica.Runner.Sequencer
@@ -309,7 +310,7 @@ defmodule Botica.Doctor do
         }
   def flags_summary do
     summary =
-      Botica.Flags.all()
+      Flags.all()
       |> Enum.map(fn flag ->
         status =
           cond do
@@ -370,7 +371,9 @@ defmodule Botica.Doctor do
   defp state_for(:enabled, _), do: "enabled"
   defp state_for(:disabled, _), do: "disabled"
 
-  defp pad(name), do: name |> Atom.to_string() |> String.pad_trailing(16)
+  defp pad(name) when is_atom(name), do: name |> Atom.to_string() |> String.pad_trailing(16)
+  defp pad(name) when is_binary(name), do: String.pad_trailing(name, 16)
+  defp pad(name), do: name |> to_string() |> String.pad_trailing(16)
 
   # Private functions
 
