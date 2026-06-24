@@ -1,6 +1,6 @@
 # Botica
 
-Environment diagnostics, health checks, and feature flags for Elixir.
+> Environment diagnostics, health checks, and feature flags for Elixir.
 
 [![Hex Version](https://img.shields.io/hexpm/v/botica.svg)](https://hex.pm/packages/botica)
 [![Hex Docs](https://img.shields.io/badge/hex-docs-ffaff3.svg)](https://hexdocs.pm/botica)
@@ -79,8 +79,8 @@ Botica.Flags.count()        # 3
 
 ### Flags in the Doctor banner
 
-The Doctor also exposes a feature-flags diagnostic — useful for `botica doctor`-style
-CLI banners:
+The Doctor also exposes a feature-flags diagnostic — useful for
+`botica doctor`-style CLI banners:
 
 ```elixir
 banner = Botica.Doctor.format_flags_summary()
@@ -107,10 +107,11 @@ banner = Botica.Doctor.format_flags_summary()
 you list `botica` as a dependency. You can customise the supervision tree
 by overriding `mod:` in your own `mix.exs`.
 
+## Documentation
+
+- `README.md` — this file (English)
+- `docs/README.es.md` — Spanish version
+
 ## License
 
 MIT — see [LICENSE.md](LICENSE.md).
-
----
-
-**For Spanish documentation, see [README_ES.md](README_ES.md).**

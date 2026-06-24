@@ -47,7 +47,7 @@ defmodule Botica.MixProject do
   defp docs do
     [
       main: "readme",
-      extras: ["README.md", "LICENSE.md"],
+      extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"], 
       groups_for_modules: [
         Core: [Botica, Botica.Doctor, Botica.Types],
         Flags: [Botica.Flags, Botica.Flags.Flag, Botica.Flags.Store],
@@ -61,6 +61,9 @@ defmodule Botica.MixProject do
         ]
       ]
     ]
+      source_url: "https://github.com/Lorenzo-SF/botica",
+      homepage_url: "https://github.com/Lorenzo-SF/botica",
+      source_ref: "v0.1.0",
   end
 
   defp dialyzer_config do
