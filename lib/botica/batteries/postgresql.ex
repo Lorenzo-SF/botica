@@ -72,15 +72,28 @@ defmodule Botica.Batteries.PostgreSQL do
   """
   @spec start_service() :: Botica.Types.fix_result()
   def start_service do
-    case System.cmd("sudo", ["systemctl", "start", "postgresql"], stderr_to_stdout: true) do
-      {_, 0} ->
-        {:ok, "PostgreSQL service started"}
-
-      {output, _} ->
-        {:error, "Failed to start PostgreSQL: #{String.trim(output)}"}
+    with {:ok, _} <- can_sudo?(),
+         {_, 0} <-
+           System.cmd("sudo", ["systemctl", "start", "postgresql"], stderr_to_stdout: true) do
+      {:ok, "PostgreSQL service started"}
+    else
+      {:error, reason} -> {:error, reason}
+      {output, _} -> {:error, "Failed to start PostgreSQL: #{String.trim(output)}"}
     end
   rescue
     error ->
       {:error, "Failed to start PostgreSQL: #{Exception.message(error)}"}
+  end
+
+  defp can_sudo? do
+    case System.cmd("sudo", ["-n", "true"], stderr_to_stdout: true) do
+      {_, 0} ->
+        {:ok, :can_sudo}
+
+      {_, _} ->
+        {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
+    end
+  rescue
+    _ -> {:error, "sudo not found or not available"}
   end
 end

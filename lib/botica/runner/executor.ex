@@ -15,7 +15,7 @@ defmodule Botica.Runner.Executor do
   # Cap Task.async_stream concurrency. Without this, a 1000-check
   # config launches 1000 processes simultaneously and can exhaust
   # schedulers / file descriptors / database connections.
-  @max_default_concurrency 32
+  @max_default_concurrency 8
 
   @doc """
   Executes all checks in parallel and returns structured results.
