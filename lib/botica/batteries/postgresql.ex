@@ -1,4 +1,7 @@
 defmodule Botica.Batteries.PostgreSQL do
+  alias Apero.Network
+  alias Arrea.Command
+
   @moduledoc """
   Predefined health check for PostgreSQL database connectivity.
 
@@ -116,15 +119,16 @@ defmodule Botica.Batteries.PostgreSQL do
   end
 
   defp check_sudo_available do
-    cond do
-      not Arrea.Command.command_exists?("sudo") ->
-        {:error, "sudo not found in PATH"}
+    if Arrea.Command.command_exists?("sudo") do
+      case Arrea.Command.execute("sudo -n true", validate: false) do
+        {:ok, %{exit_code: 0}} ->
+          :ok
 
-      true ->
-        case Arrea.Command.execute("sudo -n true", validate: false) do
-          {:ok, %{exit_code: 0}} -> :ok
-          _ -> {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
-        end
+        _ ->
+          {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
+      end
+    else
+      {:error, "sudo not found in PATH"}
     end
   end
 

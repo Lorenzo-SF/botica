@@ -1,6 +1,7 @@
 defmodule Botica.BatteriesTest do
   use ExUnit.Case, async: true
 
+  alias Arrea.Command
   alias Botica.Batteries.{Disk, Memory, PostgreSQL, Redis}
   alias Botica.Doctor
 
@@ -25,19 +26,11 @@ defmodule Botica.BatteriesTest do
 
   describe "PostgreSQL.check_connection/3" do
     @tag :integration
-    test "returns :ok when pg_isready exits 0" do
-      if Arrea.Command.command_exists?("pg_isready") do
-        # Bind to localhost — host check is skipped on most distros
-        # so this should succeed without a running PG server.
-        assert {:ok, msg} = PostgreSQL.check_connection("localhost", 5432, "postgres")
-        assert msg =~ "PostgreSQL"
-      else
-        IO.puts("pg_isready not installed — checking fallback to TCP")
-        # If pg_isready isn't installed, we fall back to Apero.Network.port_open?
-        # which will either return ok if PG is running on 5432 or error otherwise.
-        result = PostgreSQL.check_connection("localhost", 5432, "postgres")
-        assert match?({:ok, _}, result) or match?({:error, _}, result)
-      end
+    test "returns a tagged tuple (ok or error) without crashing" do
+      # Smoke test: doesn't depend on whether PG is actually running.
+      # The function must always return either {:ok, _} or {:error, _}.
+      result = PostgreSQL.check_connection("localhost", 5432, "postgres")
+      assert match?({:ok, _}, result) or match?({:error, _}, result)
     end
 
     @tag :integration
@@ -48,37 +41,34 @@ defmodule Botica.BatteriesTest do
       assert msg =~ "PostgreSQL"
     end
 
-    test "returns :ok via TCP fallback when pg_isready is missing (port open)" do
-      # We can't easily simulate pg_isready absence, but we can verify
-      # the cond-branch logic at least returns a tagged tuple (not a crash).
-      # This is a smoke test: any result means no exception.
-      assert {:ok, _} = PostgreSQL.check_connection("localhost", 5432, "postgres")
+    @tag :integration
+    test "result message includes host:port when erroring" do
+      result = PostgreSQL.check_connection("127.0.0.1", 1, "postgres")
+      assert {:error, msg} = result
+      assert msg =~ "127.0.0.1"
     end
   end
 
   describe "PostgreSQL.start_service/0" do
     @tag :integration
     test "returns :error when sudo is not available" do
-      # This test is meaningful only when sudo is missing or NOPASSWD not
-      # configured. We check the binary first to skip when irrelevant.
-      if not Arrea.Command.command_exists?("sudo") do
+      # Only meaningful when sudo is missing. Otherwise start_service
+      # would actually try to invoke systemctl (skipped explicitly).
+      if Command.command_exists?("sudo") do
+        :ok
+      else
         assert {:error, msg} = PostgreSQL.start_service()
         assert msg =~ "sudo not found"
-      else
-        # sudo IS installed — we can't safely invoke start_service in tests
-        # (would actually try to start PostgreSQL). Skip explicitly.
-        :ok
       end
     end
 
     @tag :integration
     test "returns :error when sudo requires password (NOPASSWD not set)" do
-      if Arrea.Command.command_exists?("sudo") do
-        # Try `sudo -n true` to see if NOPASSWD is configured. If not,
-        # start_service should return :error about password.
+      if Command.command_exists?("sudo") do
+        # Probe whether NOPASSWD is configured. If so, skip — we
+        # can't safely call start_service (would start a real service).
         case System.cmd("sudo", ["-n", "true"], stderr_to_stdout: true) do
           {_, 0} ->
-            # NOPASSWD is set — we can't actually test this path safely.
             :ok
 
           _ ->
