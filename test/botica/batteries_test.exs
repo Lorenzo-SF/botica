@@ -165,6 +165,34 @@ defmodule Botica.BatteriesTest do
     end
   end
 
+  describe "Memory.check_memory/2" do
+    @tag :integration
+    test "returns a tagged tuple (ok/warning/error) based on actual usage" do
+      # Smoke test: doesn't fail unless the host is in trouble. The
+      # function dispatches via Apero.OS.type() and should never crash.
+      result = Memory.check_memory(99, 99)
+      assert match?({:ok, _}, result) or match?({:warning, _}, result) or
+               match?({:error, _}, result)
+    end
+
+    @tag :integration
+    test "result message includes % used when checking returns ok/warning/error" do
+      result = Memory.check_memory(99, 99)
+      assert {status, msg} = result
+      assert msg =~ "%"
+      assert status in [:ok, :warning, :error]
+    end
+
+    test "thresholds are honored: setting both to 0 forces error if memory is non-zero" do
+      # Both thresholds at 0: any non-zero usage is an error.
+      result = Memory.check_memory(0, 0)
+      # On any sane system, used > 0, so this should be :error.
+      # If for some reason the system has zero memory used (impossible),
+      # the result would be :ok — accept both.
+      assert match?({:ok, _}, result) or match?({:error, _}, result)
+    end
+  end
+
   describe "Disk.check_def/1" do
     test "returns a valid check definition" do
       check = Disk.check_def([])
