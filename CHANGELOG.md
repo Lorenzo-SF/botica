@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0]
 
 ### Added
 
@@ -46,16 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial open source release: feature flags, task supervisor.
 
+[2.0.0]: https://hex.pm/packages/botica/2.0.0
 [1.0.0]: https://hex.pm/packages/botica/1.0.0
 
-
-> ## A note on versioning
->
-> The only canonical tag is `1.0.0` — the initial open-source
-> cut-over. Any `[0.X.Y]` headers above are **planning milestones**,
-> not releases: they have no corresponding git tag. `mix.exs`
-> `version` reflects the current development state and may be ahead
-> of the public surface.
 
 > ## A note on history
 >
@@ -69,6 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > not preserved is, by the maintainer's choice, no longer part of the
 > canonical development line.
 >
-> Tag `1.0.0` points to the initial open-source cut-over.
-> All versioned artifacts on Hex.pm and GitHub Releases follow this
-> convention.
+> Tag `1.0.0` points to the initial open-source cut-over. Tag
+> `2.0.0` will be created when this release ships. All versioned
+> artifacts on Hex.pm and GitHub Releases follow this convention.
