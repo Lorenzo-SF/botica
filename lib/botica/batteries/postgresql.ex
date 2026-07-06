@@ -70,10 +70,10 @@ defmodule Botica.Batteries.PostgreSQL do
   @spec check_connection(String.t(), non_neg_integer(), String.t()) :: Botica.Types.check_result()
   def check_connection(host, port, user) do
     cond do
-      Arrea.Command.command_exists?("pg_isready") ->
+      Command.command_exists?("pg_isready") ->
         check_via_pg_isready(host, port, user)
 
-      Apero.Network.port_open?(host, port, timeout: 2_000) ->
+      Network.port_open?(host, port, timeout: 2_000) ->
         {:ok, "PostgreSQL port #{port} is open at #{host} (pg_isready not installed)"}
 
       true ->
@@ -103,7 +103,7 @@ defmodule Botica.Batteries.PostgreSQL do
   defp check_via_pg_isready(host, port, user) do
     cmd = "pg_isready -h #{host} -p #{port} -U #{user}"
 
-    case Arrea.Command.execute(cmd, timeout: 5_000, validate: false) do
+    case Command.execute(cmd, timeout: 5_000, validate: false) do
       {:ok, %{exit_code: 0, stdout: _}} ->
         {:ok, "PostgreSQL is ready at #{host}:#{port}"}
 
@@ -119,8 +119,8 @@ defmodule Botica.Batteries.PostgreSQL do
   end
 
   defp check_sudo_available do
-    if Arrea.Command.command_exists?("sudo") do
-      case Arrea.Command.execute("sudo -n true", validate: false) do
+    if Command.command_exists?("sudo") do
+      case Command.execute("sudo -n true", validate: false) do
         {:ok, %{exit_code: 0}} ->
           :ok
 
@@ -135,7 +135,7 @@ defmodule Botica.Batteries.PostgreSQL do
   defp run_sudo_systemctl(action, service) do
     cmd = "sudo systemctl #{action} #{service}"
 
-    case Arrea.Command.execute(cmd, timeout: 30_000) do
+    case Command.execute(cmd, timeout: 30_000) do
       {:ok, %{exit_code: 0}} ->
         :ok
 
