@@ -1,8 +1,11 @@
 # Changelog
 
-All notable changes to Botica are documented in this file.
+All notable changes to this project will be documented in this file.
 
-## [0.2.0] — 2026-06-24
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
 
 ### Added
 
@@ -37,3 +40,27 @@ All notable changes to Botica are documented in this file.
   `botica` as a dependency will now start the `Botica.Flags.Store`
   GenServer automatically. Override `mod:` in your own `mix.exs` if
   you need a custom supervisor tree.
+
+## [1.0.0] - 2026-06-10
+
+### Added
+- Initial open source release: feature flags, task supervisor.
+
+[1.0.0]: https://hex.pm/packages/botica/1.0.0
+
+
+> ## A note on history
+>
+> The git history of this repository was rewritten as part of a
+> deliberate cleanup effort. The commits you can read describe the
+> codebase as it stands today — they do not preserve the original
+> chronology of development.
+>
+> Anything worth keeping from before the rewrite was carried forward
+> as tagged releases with explicit `CHANGELOG.md` entries. Anything
+> not preserved is, by the maintainer's choice, no longer part of the
+> canonical development line.
+>
+> Tag `v1.0.0` points to the initial open-source cut-over.
+> All versioned artifacts on Hex.pm and GitHub Releases follow this
+> convention.
