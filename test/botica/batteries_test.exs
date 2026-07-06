@@ -95,6 +95,59 @@ defmodule Botica.BatteriesTest do
     end
   end
 
+  describe "Redis.check_connection/2" do
+    @tag :integration
+    test "returns a tagged tuple (ok or error) without crashing" do
+      # Smoke test: env-independent. The function always returns
+      # {:ok, _} or {:error, _}.
+      result = Redis.check_connection("localhost", 6379)
+      assert match?({:ok, _}, result) or match?({:error, _}, result)
+    end
+
+    @tag :integration
+    test "returns :error for unreachable host/port" do
+      result = Redis.check_connection("127.0.0.1", 1)
+      assert {:error, msg} = result
+      assert msg =~ "Redis"
+    end
+
+    @tag :integration
+    test "error message includes host:port when erroring" do
+      result = Redis.check_connection("127.0.0.1", 1)
+      assert {:error, msg} = result
+      assert msg =~ "127.0.0.1"
+    end
+  end
+
+  describe "Redis.start_service/0" do
+    @tag :integration
+    test "returns :error when sudo is not available" do
+      if Command.command_exists?("sudo") do
+        :ok
+      else
+        assert {:error, msg} = Redis.start_service()
+        assert msg =~ "sudo not found"
+      end
+    end
+
+    @tag :integration
+    test "returns :error when sudo requires password (NOPASSWD not set)" do
+      if Command.command_exists?("sudo") do
+        case System.cmd("sudo", ["-n", "true"], stderr_to_stdout: true) do
+          {_, 0} ->
+            # NOPASSWD set — can't safely test the actual start path
+            :ok
+
+          _ ->
+            assert {:error, msg} = Redis.start_service()
+            assert msg =~ "sudo" and msg =~ "password"
+        end
+      else
+        :ok
+      end
+    end
+  end
+
   describe "Memory.check_def/1" do
     test "returns a valid check definition" do
       check = Memory.check_def([])
