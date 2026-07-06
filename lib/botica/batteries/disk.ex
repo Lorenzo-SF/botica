@@ -1,14 +1,21 @@
 defmodule Botica.Batteries.Disk do
+  alias Arrea.Command
+
   @moduledoc """
   Predefined health check for disk space usage.
 
   This module provides a check that monitors disk consumption
   and warns when available space falls below safe thresholds.
 
+  Uses `Arrea.Command.execute/2` with `LC_ALL=C` so the parser
+  always sees the English output regardless of the host locale
+  (a Spanish- or French-locale host would otherwise emit localized
+  column headers and break the parser).
+
   ## Usage
 
       config = %{
-        app_name: \"myapp\",
+        app_name: "myapp",
         checks: [
           Botica.Batteries.Disk.check(path: "/", warning_threshold: 80, error_threshold: 95)
         ]
@@ -16,7 +23,7 @@ defmodule Botica.Batteries.Disk do
 
   ## Options
 
-  - `:path` - Path to check (default: \"/\")
+  - `:path` - Path to check (default: "/")
   - `:warning_threshold` - Disk % to trigger warning (default: 80)
   - `:error_threshold` - Disk % to trigger error (default: 95)
   - `:timeout` - Check timeout in ms (default: 5000)
@@ -50,16 +57,23 @@ defmodule Botica.Batteries.Disk do
   @spec check_disk(String.t(), non_neg_integer(), non_neg_integer()) ::
           Botica.Types.check_result()
   def check_disk(path, warning_threshold, error_threshold) do
-    case System.cmd("df", ["-k", path], stderr_to_stdout: true) do
-      {output, 0} when is_binary(output) ->
+    # Force POSIX locale so the parser can rely on English column
+    # headers (Filesystem, Use%, etc.).
+    env = %{"LC_ALL" => "C"}
+
+    case Command.execute("df -k #{path}", timeout: 5_000, validate: false, env: env) do
+      {:ok, %{exit_code: 0, stdout: output}} ->
         parse_df_output(output, warning_threshold, error_threshold)
 
-      _ ->
-        {:error, "Could not determine disk usage for #{path}"}
+      {:ok, %{exit_code: code, stdout: output}} ->
+        {:error, "df exited #{code} for #{path}: #{String.trim(output)}"}
+
+      {:error, :timeout} ->
+        {:error, "Disk check timed out for #{path}"}
+
+      {:error, reason} ->
+        {:error, "df failed for #{path}: #{inspect(reason)}"}
     end
-  rescue
-    error ->
-      {:error, "Failed to check disk: #{Exception.message(error)}"}
   end
 
   defp parse_df_output(output, warning_threshold, error_threshold) do
@@ -75,16 +89,13 @@ defmodule Botica.Batteries.Disk do
       {:error, "Could not parse disk usage output"}
     else
       case parse_use_percentage(data_line) do
-        nil ->
-          {:error, "Could not determine disk usage percentage"}
-
-        used_percent ->
-          disk_status(used_percent, warning_threshold, error_threshold)
+        nil -> {:error, "Could not determine disk usage percentage"}
+        used_percent -> classify_usage(used_percent, warning_threshold, error_threshold)
       end
     end
   end
 
-  defp disk_status(used_percent, warning_threshold, error_threshold) do
+  defp classify_usage(used_percent, warning_threshold, error_threshold) do
     cond do
       used_percent >= error_threshold ->
         {:error, "Disk space critically low: #{used_percent}% used"}
@@ -98,17 +109,17 @@ defmodule Botica.Batteries.Disk do
   end
 
   defp parse_use_percentage(line) do
-    # Pattern: "Filesystem  Size  Used Avail Use% Mounted on"
-    # or on macOS: "Filesystem  512-blocks  Used  Available  Capacity  iused  ifree  %iused  Mounted on"
-    # We need to find the Use% column
+    # `df -k` (Linux/GNU): "Filesystem 1024-blocks Used Available Use% Mounted on"
+    # `df -k` (macOS/BSD): "Filesystem 512-blocks Used Avail Capacity iused ifree %iused Mounted on"
+    # In both cases the use% column is one before last. Split and pick it.
     parts = String.split(String.trim(line), ~r/\s+/, trim: true)
 
     case parts do
-      # Linux format: ... Use%
       parts when length(parts) >= 5 ->
         use_index = length(parts) - 2
 
-        Enum.at(parts, use_index)
+        parts
+        |> Enum.at(use_index)
         |> String.replace("%", "")
         |> String.trim()
         |> String.to_integer()

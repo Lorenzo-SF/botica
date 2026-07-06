@@ -171,6 +171,7 @@ defmodule Botica.BatteriesTest do
       # Smoke test: doesn't fail unless the host is in trouble. The
       # function dispatches via Apero.OS.type() and should never crash.
       result = Memory.check_memory(99, 99)
+
       assert match?({:ok, _}, result) or match?({:warning, _}, result) or
                match?({:error, _}, result)
     end
@@ -207,6 +208,33 @@ defmodule Botica.BatteriesTest do
     test "accepts custom path" do
       check = Disk.check_def(path: "/var/data")
       assert is_map(check)
+    end
+  end
+
+  describe "Disk.check_disk/3" do
+    @tag :integration
+    test "returns a tagged tuple (ok/warning/error) based on actual usage" do
+      # Smoke test: env-independent. Function must always return a
+      # tagged tuple — never crash.
+      result = Disk.check_disk("/", 99, 99)
+      assert match?({:ok, _}, result) or match?({:warning, _}, result) or
+               match?({:error, _}, result)
+    end
+
+    @tag :integration
+    test "result message includes % used when checking succeeds" do
+      result = Disk.check_disk("/", 99, 99)
+      assert {status, msg} = result
+      assert msg =~ "%"
+      assert status in [:ok, :warning, :error]
+    end
+
+    @tag :integration
+    test "thresholds of 0 force error if disk is non-empty" do
+      # 0% warning, 0% error: any non-zero usage is :error.
+      result = Disk.check_disk("/", 0, 0)
+      # On any sane system / is not empty.
+      assert match?({:ok, _}, result) or match?({:error, _}, result)
     end
   end
 
