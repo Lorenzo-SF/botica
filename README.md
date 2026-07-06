@@ -107,6 +107,47 @@ banner = Botica.Doctor.format_flags_summary()
 you list `botica` as a dependency. You can customise the supervision tree
 by overriding `mod:` in your own `mix.exs`.
 
+## Architecture
+
+```
+Botica (top-level facade — defdelegates)
+├── Doctor          — entry point: run/1, fix/1, summary/1, health_check/1
+│   ├── Batteries   — predefined checks (PostgreSQL, Redis, Memory, Disk)
+│   ├── Check       — behaviour (Botica.Check.Behaviour) + result struct
+│   ├── Runner      — orchestration layer
+│   │   ├── Executor  — parallel execution with timeout + concurrency caps
+│   │   └── Sequencer — priority sorting, tag/fixable filtering
+│   ├── Repair      — auto-fix orchestration (Botica.Repair.Fixer)
+│   └── Flags       — feature-flags diagnostic (flags_summary, format_flags_summary)
+└── Flags           — feature flags (define, enable, disable, rollout, etc.)
+    ├── Flag        — struct + factory with rollout clamping
+    └── Store       — GenServer that owns the :botica_flags ETS table
+```
+
+- **`Botica.Doctor`** is the main entry point. `run/2` validates the config
+  and hands it to `Botica.Runner.Executor`, which sorts the checks via
+  `Botica.Runner.Sequencer` and runs them in parallel with per-check
+  timeouts and a concurrency cap. `fix/1` delegates to
+  `Botica.Repair.Fixer` to apply fix functions on checks that errored.
+
+- **`Botica.Runner.Executor`** is the execution engine. It uses
+  `Task.async_stream` with `max_concurrency` capped at 8 (configurable),
+  handles per-check timeouts, and supports `stop_on_first_error` /
+  `continue_on_error` flags. `execute_sequential/1` is exposed for
+  debugging or ordered runs.
+
+- **`Botica.Runner.Sequencer`** sorts checks by `(priority, id)` for
+  deterministic execution, and provides `filter_by_tags/2`,
+  `filter_fixable/1`, and `group_by_tags/1` helpers.
+
+- **`Botica.Repair.Fixer`** runs fix functions for failed checks and
+  returns a structured report: `%{applied: [...], failed: [...], skipped: [...]}`.
+  Supports `fix_one/2` for ad-hoc single-check repair.
+
+- **`Botica.Flags`** is the feature-flag subsystem, backed by a single
+  ETS table (`:botica_flags`) owned by `Botica.Flags.Store` (GenServer).
+  Writes go through the GenServer; reads are lock-free O(1).
+
 ## Documentation
 
 - `README.md` — this file (English)
