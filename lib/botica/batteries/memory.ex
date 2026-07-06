@@ -1,14 +1,22 @@
 defmodule Botica.Batteries.Memory do
+  alias Apero.OS
+  alias Arrea.Command
+
   @moduledoc """
   Predefined health check for system memory usage.
 
   This module provides a check that monitors memory consumption
   and warns when it exceeds safe thresholds.
 
+  Uses `Apero.OS.type/0` to dispatch directly between Linux (`free`)
+  and macOS (`vm_stat`) instead of a blind fallback. All command
+  execution is routed through `Command.execute/2` so consumers get
+  real timeout cancellation, telemetry, and structured errors.
+
   ## Usage
 
       config = %{
-        app_name: \"myapp\",
+        app_name: "myapp",
         checks: [
           Botica.Batteries.Memory.check(warning_threshold: 80, error_threshold: 95)
         ]
@@ -43,30 +51,60 @@ defmodule Botica.Batteries.Memory do
   end
 
   @doc """
-  Checks system memory usage on macOS or Linux.
+  Checks system memory usage. Dispatches Linux vs macOS via `Apero.OS.type/0`.
   """
   @spec check_memory(non_neg_integer(), non_neg_integer()) :: Botica.Types.check_result()
   def check_memory(warning_threshold, error_threshold) do
-    case System.cmd("free", [], stderr_to_stdout: true) do
-      {output, 0} when is_binary(output) ->
-        parse_linux_memory(output, warning_threshold, error_threshold)
-
-      _ ->
-        # Try macOS
-        case System.cmd("vm_stat", [], stderr_to_stdout: true) do
-          {output, 0} when is_binary(output) ->
-            parse_macos_memory(output, warning_threshold, error_threshold)
-
-          _ ->
-            {:error, "Could not determine memory usage"}
-        end
+    case OS.type() do
+      :linux -> check_linux_memory(warning_threshold, error_threshold)
+      :macos -> check_macos_memory(warning_threshold, error_threshold)
+      :windows -> {:error, "Windows memory check not implemented"}
+      _ -> {:error, "Unsupported OS: #{OS.type()}"}
     end
-  rescue
-    error ->
-      {:error, "Failed to check memory: #{Exception.message(error)}"}
   end
 
-  # Parse Linux /proc/meminfo
+  # ── Private ────────────────────────────────────────────────────────────────
+
+  defp check_linux_memory(warning_threshold, error_threshold) do
+    # Read /proc/meminfo directly. It's the canonical Linux memory
+    # interface (always present, locale-independent) and gives us
+    # both MemTotal and MemAvailable in a stable format. Using `free`
+    # instead is locale-dependent (Spanish/French/etc hosts break the
+    # parser) and its modern short format (Mem: ...) doesn't expose
+    # MemAvailable explicitly.
+    case Command.execute("cat /proc/meminfo", timeout: 5_000, validate: false) do
+      {:ok, %{exit_code: 0, stdout: output}} ->
+        parse_linux_memory(output, warning_threshold, error_threshold)
+
+      {:ok, %{exit_code: code, stdout: output}} ->
+        {:error, "/proc/meminfo read failed (exit #{code}): #{String.trim(output)}"}
+
+      {:error, :timeout} ->
+        {:error, "Memory check timed out (cat /proc/meminfo)"}
+
+      {:error, reason} ->
+        {:error, "/proc/meminfo read failed: #{inspect(reason)}"}
+    end
+  end
+
+  defp check_macos_memory(warning_threshold, error_threshold) do
+    case Command.execute("vm_stat", timeout: 5_000, validate: false) do
+      {:ok, %{exit_code: 0, stdout: output}} ->
+        parse_macos_memory(output, warning_threshold, error_threshold)
+
+      {:ok, %{exit_code: code, stdout: output}} ->
+        {:error, "vm_stat exited #{code}: #{String.trim(output)}"}
+
+      {:error, :timeout} ->
+        {:error, "Memory check timed out (vm_stat)"}
+
+      {:error, reason} ->
+        {:error, "vm_stat failed: #{inspect(reason)}"}
+    end
+  end
+
+  # ── Linux parsing (/proc/meminfo via free) ────────────────────────────────
+
   defp parse_linux_memory(output, warning_threshold, error_threshold) do
     lines = String.split(output, "\n", trim: true)
 
@@ -74,21 +112,11 @@ defmodule Botica.Batteries.Memory do
     mem_available_line = find_mem_line(lines, "MemAvailable:")
 
     with {mem_total, :valid} <- parse_mem_value_with_validation(mem_total_line),
-         {mem_available, :valid} <- parse_mem_value_with_validation(mem_available_line),
-         {used_percent, _} <- {round((mem_total - mem_available) / mem_total * 100), true} do
-      cond do
-        used_percent >= error_threshold ->
-          {:error, "Memory usage critically high: #{used_percent}% used"}
-
-        used_percent >= warning_threshold ->
-          {:warning, "Memory usage elevated: #{used_percent}% used"}
-
-        true ->
-          {:ok, "Memory usage normal: #{used_percent}% used"}
-      end
+         {mem_available, :valid} <- parse_mem_value_with_validation(mem_available_line) do
+      used_percent = round((mem_total - mem_available) / mem_total * 100)
+      classify_usage(used_percent, warning_threshold, error_threshold)
     else
-      _ ->
-        {:error, "Could not parse memory info"}
+      _ -> {:error, "Could not parse /proc/meminfo output"}
     end
   end
 
@@ -96,7 +124,6 @@ defmodule Botica.Batteries.Memory do
     Enum.find(lines, fn line -> String.starts_with?(line, prefix) end)
   end
 
-  # Returns {value, :valid} or {0, :invalid} for validation
   defp parse_mem_value_with_validation(nil), do: {0, :invalid}
   defp parse_mem_value_with_validation(""), do: {0, :invalid}
 
@@ -110,46 +137,29 @@ defmodule Botica.Batteries.Memory do
     {value, :valid}
   end
 
-  # Parse macOS vm_stat output
-  defp parse_macos_memory(output, warning_threshold, error_threshold) do
-    # vm_stat output needs to be parsed differently
-    # Pages active, inactive, wired, free
-    # page size is typically 4096 bytes (can be different on some Macs)
-    # Note: page_size calculation kept for future use if needed
-    _page_size = get_page_size()
+  # ── macOS parsing (vm_stat pages) ──────────────────────────────────────────
 
+  defp parse_macos_memory(output, warning_threshold, error_threshold) do
     lines = String.split(output, "\n", trim: true)
 
     {active, inactive, wired, free} = parse_macos_pages(lines)
-
     total = active + inactive + wired + free
-    # active + wired pages are "in use"
     used = active + wired
 
     used_percent = if total > 0, do: round(used / total * 100), else: 0
 
-    cond do
-      used_percent >= error_threshold ->
-        {:error, "Memory usage critically high: #{used_percent}% used"}
-
-      used_percent >= warning_threshold ->
-        {:warning, "Memory usage elevated: #{used_percent}% used"}
-
-      true ->
-        {:ok, "Memory usage normal: #{used_percent}% used"}
-    end
+    classify_usage(used_percent, warning_threshold, error_threshold)
   rescue
-    _ ->
-      {:error, "Could not parse macOS memory info"}
+    _ -> {:error, "Could not parse macOS vm_stat output"}
   end
 
   defp parse_macos_pages(lines) do
-    active = find_and_parse_page(lines, "Pages active:")
-    inactive = find_and_parse_page(lines, "Pages inactive:")
-    wired = find_and_parse_page(lines, "Pages wired:")
-    free = find_and_parse_page(lines, "Pages free:")
-
-    {active, inactive, wired, free}
+    {
+      find_and_parse_page(lines, "Pages active:"),
+      find_and_parse_page(lines, "Pages inactive:"),
+      find_and_parse_page(lines, "Pages wired:"),
+      find_and_parse_page(lines, "Pages free:")
+    }
   end
 
   defp find_and_parse_page(lines, prefix) do
@@ -166,11 +176,18 @@ defmodule Botica.Batteries.Memory do
     end
   end
 
-  defp get_page_size do
-    case System.cmd("pagesize", [], stderr_to_stdout: true) do
-      {size, 0} -> String.trim(size) |> String.to_integer()
-      # default
-      _ -> 4096
+  # ── Shared classification ──────────────────────────────────────────────────
+
+  defp classify_usage(used_percent, warning_threshold, error_threshold) do
+    cond do
+      used_percent >= error_threshold ->
+        {:error, "Memory usage critically high: #{used_percent}% used"}
+
+      used_percent >= warning_threshold ->
+        {:warning, "Memory usage elevated: #{used_percent}% used"}
+
+      true ->
+        {:ok, "Memory usage normal: #{used_percent}% used"}
     end
   end
 end
