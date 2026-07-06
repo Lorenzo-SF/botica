@@ -85,7 +85,8 @@ defmodule Botica.Batteries.Redis do
       ["sudo", "systemctl", "start", "redis"]
     ]
 
-    results = Enum.map(commands, fn cmd -> System.cmd(hd(cmd), tl(cmd), stderr_to_stdout: true) end)
+    results =
+      Enum.map(commands, fn cmd -> System.cmd(hd(cmd), tl(cmd), stderr_to_stdout: true) end)
 
     case Enum.find(results, fn {_, exit_code} -> exit_code == 0 end) do
       {_output, 0} ->
