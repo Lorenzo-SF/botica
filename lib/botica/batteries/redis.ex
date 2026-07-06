@@ -1,18 +1,30 @@
 defmodule Botica.Batteries.Redis do
+  alias Apero.Network
+  alias Arrea.Command
+
   @moduledoc """
   Predefined health check for Redis cache server.
 
   This module provides a ready-to-use check that verifies Redis
-  is accessible using the `redis-cli` command.
+  is accessible. It prefers the `redis-cli` binary and falls back
+  to a raw TCP port check (via `Apero.Network.port_open?/3`) when
+  the binary is not installed.
+
+  All command execution is routed through `Command.execute/2` so
+  consumers get the full Arrea infra for free: real timeout
+  cancellation, validation, telemetry, shell handling, and the
+  sudo allowlist configured in `config/config.exs`.
 
   ## Installation
 
-  Requires `redis-cli` to be available in the system PATH.
+  Optional: install `redis-cli` (ships with the `redis-tools` /
+  `redis-server` packages on most distros). Without it, the battery
+  degrades to a raw TCP probe on the configured port.
 
   ## Usage
 
       config = %{
-        app_name: \"myapp\",
+        app_name: "myapp",
         checks: [
           Botica.Batteries.Redis.check()
         ]
@@ -20,7 +32,7 @@ defmodule Botica.Batteries.Redis do
 
   ## Options
 
-  - `:host` - Redis host (default: \"localhost\")
+  - `:host` - Redis host (default: "localhost")
   - `:port` - Redis port (default: 6379)
   - `:timeout` - Check timeout in ms (default: 5000)
   """
@@ -48,65 +60,121 @@ defmodule Botica.Batteries.Redis do
 
   @doc """
   Checks if Redis is responding to PING.
+
+  Uses `redis-cli` when available. Falls back to a TCP probe on
+  the configured port via `Apero.Network.port_open?/3` when the
+  binary is not installed.
   """
   @spec check_connection(String.t(), non_neg_integer()) :: Botica.Types.check_result()
   def check_connection(host, port) do
-    args = ["-h", host, "-p", to_string(port), "ping"]
+    cond do
+      Command.command_exists?("redis-cli") ->
+        check_via_redis_cli(host, port)
 
-    case System.cmd("redis-cli", args, stderr_to_stdout: true) do
-      {"PONG", 0} ->
-        {:ok, "Redis is responding at #{host}:#{port}"}
+      Network.port_open?(host, port, timeout: 2_000) ->
+        {:ok, "Redis port #{port} is open at #{host} (redis-cli not installed)"}
 
-      {output, _} ->
-        {:error, "Redis not responding: #{String.trim(output)}"}
+      true ->
+        {:error, "Redis unreachable at #{host}:#{port} (no redis-cli, port closed)"}
     end
-  rescue
-    error ->
-      {:error, "Failed to check Redis: #{Exception.message(error)}"}
   end
 
   @doc """
   Attempts to start the Redis service.
+
+  Tries `systemctl start redis-server` first, falls back to
+  `systemctl start redis` for distros that name the unit differently.
+  Requires sudo NOPASSWD configured for those systemctl calls
+  (see `config :arrea, :engine, sudo_allowlist` in `config/config.exs`).
   """
   @spec start_service() :: Botica.Types.fix_result()
   def start_service do
-    case can_sudo?() do
-      {:ok, _} -> try_start_commands()
-      {:error, reason} -> {:error, reason}
+    with :ok <- check_sudo_available(),
+         :ok <- try_start_commands() do
+      {:ok, "Redis service started"}
+    else
+      {:error, _} = err -> err
     end
-  rescue
-    error ->
-      {:error, "Failed to start Redis: #{Exception.message(error)}"}
   end
 
+  # ── Private helpers ───────────────────────────────────────────────────────
+
+  defp check_via_redis_cli(host, port) do
+    cmd = "redis-cli -h #{host} -p #{port} ping"
+
+    case Command.execute(cmd, timeout: 5_000, validate: false) do
+      {:ok, %{exit_code: 0, stdout: "PONG\r\n" <> _}} ->
+        {:ok, "Redis is responding at #{host}:#{port}"}
+
+      {:ok, %{exit_code: 0, stdout: "PONG\n" <> _}} ->
+        {:ok, "Redis is responding at #{host}:#{port}"}
+
+      {:ok, %{exit_code: 0, stdout: stdout}} ->
+        # redis-cli on success sometimes prints "PONG" without trailing newline
+        if String.trim(stdout) == "PONG" do
+          {:ok, "Redis is responding at #{host}:#{port}"}
+        else
+          {:error, "Redis unexpected output: #{String.trim(stdout)}"}
+        end
+
+      {:ok, %{exit_code: code, stdout: output}} ->
+        {:error, "Redis not responding (exit #{code}): #{String.trim(output)}"}
+
+      {:error, :timeout} ->
+        {:error, "Redis check timed out at #{host}:#{port}"}
+
+      {:error, reason} ->
+        {:error, "Redis check failed: #{inspect(reason)}"}
+    end
+  end
+
+  defp check_sudo_available do
+    if Command.command_exists?("sudo") do
+      case Command.execute("sudo -n true", validate: false) do
+        {:ok, %{exit_code: 0}} ->
+          :ok
+
+        _ ->
+          {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
+      end
+    else
+      {:error, "sudo not found in PATH"}
+    end
+  end
+
+  # Try multiple systemctl unit names because different distros name
+  # the redis service differently (redis-server on Debian/Ubuntu,
+  # redis on RHEL/Fedora/Arch).
   defp try_start_commands do
-    commands = [
-      ["sudo", "systemctl", "start", "redis-server"],
-      ["sudo", "systemctl", "start", "redis"]
-    ]
+    units = ["redis-server", "redis"]
+    results = Enum.map(units, &try_start_unit/1)
 
-    results =
-      Enum.map(commands, fn cmd -> System.cmd(hd(cmd), tl(cmd), stderr_to_stdout: true) end)
-
-    case Enum.find(results, fn {_, exit_code} -> exit_code == 0 end) do
-      {_output, 0} ->
-        {:ok, "Redis service started"}
-
-      _ ->
-        last_output = results |> List.last() |> elem(0)
-        {:error, "Failed to start Redis: #{String.trim(last_output)}"}
+    case Enum.find(results, fn r -> match?({:ok, _}, r) end) do
+      {:ok, _} = ok -> ok
+      nil -> {:error, format_start_failures(results)}
     end
   end
 
-  defp can_sudo? do
-    case System.cmd("sudo", ["-n", "true"], stderr_to_stdout: true) do
-      {_, 0} ->
-        {:ok, :can_sudo}
+  defp try_start_unit(unit) do
+    case Command.execute("sudo systemctl start #{unit}", timeout: 30_000) do
+      {:ok, %{exit_code: 0}} ->
+        {:ok, "Redis service started (unit: #{unit})"}
 
-      {_, _} ->
-        {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
+      {:ok, %{exit_code: code, stdout: output}} ->
+        {:error, {:unit, unit, code, String.trim(output)}}
+
+      {:error, reason} ->
+        {:error, {:unit, unit, nil, inspect(reason)}}
     end
-  rescue
-    _ -> {:error, "sudo not found or not available"}
+  end
+
+  defp format_start_failures(results) do
+    details =
+      Enum.map_join(results, "\n", fn
+        {:error, {:unit, unit, code, msg}} -> "  #{unit}: exit #{inspect(code)} — #{msg}"
+        other -> "  #{inspect(other)}"
+      end)
+
+    "Failed to start Redis (tried all unit names):\n#{details}"
   end
 end
