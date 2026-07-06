@@ -71,32 +71,30 @@ defmodule Botica.Batteries.Redis do
   @spec start_service() :: Botica.Types.fix_result()
   def start_service do
     case can_sudo?() do
-      {:ok, _} ->
-        commands = [
-          ["sudo", "systemctl", "start", "redis-server"],
-          ["sudo", "systemctl", "start", "redis"]
-        ]
-
-        results =
-          Enum.map(commands, fn cmd ->
-            System.cmd(hd(cmd), tl(cmd), stderr_to_stdout: true)
-          end)
-
-        case Enum.find(results, fn {_, exit_code} -> exit_code == 0 end) do
-          {_output, 0} ->
-            {:ok, "Redis service started"}
-
-          _ ->
-            last_output = results |> List.wrap() |> List.last() |> elem(0)
-            {:error, "Failed to start Redis: #{String.trim(last_output)}"}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
+      {:ok, _} -> try_start_commands()
+      {:error, reason} -> {:error, reason}
     end
   rescue
     error ->
       {:error, "Failed to start Redis: #{Exception.message(error)}"}
+  end
+
+  defp try_start_commands do
+    commands = [
+      ["sudo", "systemctl", "start", "redis-server"],
+      ["sudo", "systemctl", "start", "redis"]
+    ]
+
+    results = Enum.map(commands, fn cmd -> System.cmd(hd(cmd), tl(cmd), stderr_to_stdout: true) end)
+
+    case Enum.find(results, fn {_, exit_code} -> exit_code == 0 end) do
+      {_output, 0} ->
+        {:ok, "Redis service started"}
+
+      _ ->
+        last_output = results |> List.last() |> elem(0)
+        {:error, "Failed to start Redis: #{String.trim(last_output)}"}
+    end
   end
 
   defp can_sudo? do
