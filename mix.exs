@@ -37,6 +37,7 @@ defmodule Botica.MixProject do
   defp deps do
     [
       {:apero, github: "Lorenzo-SF/apero", branch: "main"},
+      {:arrea, github: "Lorenzo-SF/arrea", branch: "main"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},

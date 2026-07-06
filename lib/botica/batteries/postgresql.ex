@@ -1,18 +1,30 @@
 defmodule Botica.Batteries.PostgreSQL do
+  alias Apero.Network
+  alias Arrea.Command
+
   @moduledoc """
   Predefined health check for PostgreSQL database connectivity.
 
   This module provides a ready-to-use check that verifies PostgreSQL
-  is accessible using the `pg_isready` command.
+  is accessible. It prefers the `pg_isready` binary and falls back to
+  a raw TCP port check (via `Apero.Network.port_open?/3`) when the
+  binary is not installed.
+
+  All command execution is routed through `Arrea.Command.execute/2`
+  so consumers get the full Arrea infra for free: real timeout
+  cancellation, validation, telemetry, shell handling, and the
+  sudo allowlist configured in `config/config.exs`.
 
   ## Installation
 
-  Requires `pg_isready` to be available in the system PATH.
+  Optional: install `pg_isready` (ships with the `postgresql-client`
+  package on most distros). Without it, the battery degrades to a
+  raw TCP probe on the configured port.
 
   ## Usage
 
       config = %{
-        app_name: \"myapp\",
+        app_name: "myapp",
         checks: [
           Botica.Batteries.PostgreSQL.check()
         ]
@@ -20,9 +32,9 @@ defmodule Botica.Batteries.PostgreSQL do
 
   ## Options
 
-  - `:host` - PostgreSQL host (default: \"localhost\")
+  - `:host` - PostgreSQL host (default: "localhost")
   - `:port` - PostgreSQL port (default: 5432)
-  - `:user` - PostgreSQL user (default: \"postgres\")
+  - `:user` - PostgreSQL user (default: "postgres")
   - `:timeout` - Check timeout in ms (default: 5000)
   """
 
@@ -50,50 +62,88 @@ defmodule Botica.Batteries.PostgreSQL do
 
   @doc """
   Checks if PostgreSQL is ready to accept connections.
+
+  Uses `pg_isready` when available. Falls back to a TCP probe on the
+  configured port via `Apero.Network.port_open?/3` when the binary is
+  not installed.
   """
   @spec check_connection(String.t(), non_neg_integer(), String.t()) :: Botica.Types.check_result()
   def check_connection(host, port, user) do
-    args = ["-h", host, "-p", to_string(port), "-U", user]
+    cond do
+      Command.command_exists?("pg_isready") ->
+        check_via_pg_isready(host, port, user)
 
-    case System.cmd("pg_isready", args, stderr_to_stdout: true) do
-      {_output, 0} ->
-        {:ok, "PostgreSQL is ready at #{host}:#{port}"}
+      Network.port_open?(host, port, timeout: 2_000) ->
+        {:ok, "PostgreSQL port #{port} is open at #{host} (pg_isready not installed)"}
 
-      {output, _} ->
-        {:error, "PostgreSQL not ready: #{String.trim(output)}"}
+      true ->
+        {:error, "PostgreSQL unreachable at #{host}:#{port} (no pg_isready, port closed)"}
     end
-  rescue
-    error ->
-      {:error, "Failed to check PostgreSQL: #{Exception.message(error)}"}
   end
 
   @doc """
-  Attempts to start the PostgreSQL service.
+  Attempts to start the PostgreSQL service via systemctl.
+
+  Requires sudo NOPASSWD configured for `systemctl start postgresql`
+  (or equivalent). The exact sudo commands allowed are configured
+  via `config :arrea, :engine, sudo_allowlist` in `config/config.exs`.
   """
   @spec start_service() :: Botica.Types.fix_result()
   def start_service do
-    with {:ok, _} <- can_sudo?(),
-         {_, 0} <-
-           System.cmd("sudo", ["systemctl", "start", "postgresql"], stderr_to_stdout: true) do
+    with :ok <- check_sudo_available(),
+         :ok <- run_sudo_systemctl("start", "postgresql") do
       {:ok, "PostgreSQL service started"}
     else
-      {:error, reason} -> {:error, reason}
-      {output, _} -> {:error, "Failed to start PostgreSQL: #{String.trim(output)}"}
+      {:error, _} = err -> err
     end
-  rescue
-    error ->
-      {:error, "Failed to start PostgreSQL: #{Exception.message(error)}"}
   end
 
-  defp can_sudo? do
-    case System.cmd("sudo", ["-n", "true"], stderr_to_stdout: true) do
-      {_, 0} ->
-        {:ok, :can_sudo}
+  # ── Private helpers ───────────────────────────────────────────────────────
 
-      {_, _} ->
-        {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
+  defp check_via_pg_isready(host, port, user) do
+    cmd = "pg_isready -h #{host} -p #{port} -U #{user}"
+
+    case Command.execute(cmd, timeout: 5_000, validate: false) do
+      {:ok, %{exit_code: 0, stdout: _}} ->
+        {:ok, "PostgreSQL is ready at #{host}:#{port}"}
+
+      {:ok, %{exit_code: code, stdout: output}} ->
+        {:error, "PostgreSQL not ready (exit #{code}): #{String.trim(output)}"}
+
+      {:error, :timeout} ->
+        {:error, "PostgreSQL check timed out at #{host}:#{port}"}
+
+      {:error, reason} ->
+        {:error, "PostgreSQL check failed: #{inspect(reason)}"}
     end
-  rescue
-    _ -> {:error, "sudo not found or not available"}
+  end
+
+  defp check_sudo_available do
+    if Command.command_exists?("sudo") do
+      case Command.execute("sudo -n true", validate: false) do
+        {:ok, %{exit_code: 0}} ->
+          :ok
+
+        _ ->
+          {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
+      end
+    else
+      {:error, "sudo not found in PATH"}
+    end
+  end
+
+  defp run_sudo_systemctl(action, service) do
+    cmd = "sudo systemctl #{action} #{service}"
+
+    case Command.execute(cmd, timeout: 30_000) do
+      {:ok, %{exit_code: 0}} ->
+        :ok
+
+      {:ok, %{exit_code: code, stdout: output}} ->
+        {:error, "systemctl #{action} #{service} failed (exit #{code}): #{String.trim(output)}"}
+
+      {:error, reason} ->
+        {:error, "systemctl #{action} #{service} failed: #{inspect(reason)}"}
+    end
   end
 end

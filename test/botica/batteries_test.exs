@@ -1,6 +1,7 @@
 defmodule Botica.BatteriesTest do
   use ExUnit.Case, async: true
 
+  alias Arrea.Command
   alias Botica.Batteries.{Disk, Memory, PostgreSQL, Redis}
   alias Botica.Doctor
 
@@ -20,6 +21,63 @@ defmodule Botica.BatteriesTest do
     test "accepts custom options" do
       check = PostgreSQL.check_def(host: "db.example.com", port: 5433)
       assert is_map(check)
+    end
+  end
+
+  describe "PostgreSQL.check_connection/3" do
+    @tag :integration
+    test "returns a tagged tuple (ok or error) without crashing" do
+      # Smoke test: doesn't depend on whether PG is actually running.
+      # The function must always return either {:ok, _} or {:error, _}.
+      result = PostgreSQL.check_connection("localhost", 5432, "postgres")
+      assert match?({:ok, _}, result) or match?({:error, _}, result)
+    end
+
+    @tag :integration
+    test "returns :error for unreachable host/port" do
+      # 127.0.0.1:1 should be unreachable on any sane system
+      result = PostgreSQL.check_connection("127.0.0.1", 1, "postgres")
+      assert {:error, msg} = result
+      assert msg =~ "PostgreSQL"
+    end
+
+    @tag :integration
+    test "result message includes host:port when erroring" do
+      result = PostgreSQL.check_connection("127.0.0.1", 1, "postgres")
+      assert {:error, msg} = result
+      assert msg =~ "127.0.0.1"
+    end
+  end
+
+  describe "PostgreSQL.start_service/0" do
+    @tag :integration
+    test "returns :error when sudo is not available" do
+      # Only meaningful when sudo is missing. Otherwise start_service
+      # would actually try to invoke systemctl (skipped explicitly).
+      if Command.command_exists?("sudo") do
+        :ok
+      else
+        assert {:error, msg} = PostgreSQL.start_service()
+        assert msg =~ "sudo not found"
+      end
+    end
+
+    @tag :integration
+    test "returns :error when sudo requires password (NOPASSWD not set)" do
+      if Command.command_exists?("sudo") do
+        # Probe whether NOPASSWD is configured. If so, skip — we
+        # can't safely call start_service (would start a real service).
+        case System.cmd("sudo", ["-n", "true"], stderr_to_stdout: true) do
+          {_, 0} ->
+            :ok
+
+          _ ->
+            assert {:error, msg} = PostgreSQL.start_service()
+            assert msg =~ "sudo" and msg =~ "password"
+        end
+      else
+        :ok
+      end
     end
   end
 
