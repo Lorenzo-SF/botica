@@ -4,7 +4,7 @@ defmodule Botica.MixProject do
   def project do
     [
       app: :botica,
-      version: "0.2.0",
+      version: "2.0.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -36,8 +36,8 @@ defmodule Botica.MixProject do
 
   defp deps do
     [
-      {:apero, github: "Lorenzo-SF/apero", branch: "main"},
-      {:arrea, github: "Lorenzo-SF/arrea", branch: "main"},
+      {:apero, "~> 2.1.0"},
+      {:arrea, "~> 2.1.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
@@ -50,7 +50,7 @@ defmodule Botica.MixProject do
       main: "readme",
       source_url: "https://github.com/Lorenzo-SF/botica",
       homepage_url: "https://github.com/Lorenzo-SF/botica",
-      source_ref: "1.0.0",
+      source_ref: "2.0.0",
       extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"],
       groups_for_modules: [
         Core: [Botica, Botica.Doctor, Botica.Types],

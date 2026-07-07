@@ -90,7 +90,7 @@ defmodule Botica.Batteries.Redis do
   @spec start_service() :: Botica.Types.fix_result()
   def start_service do
     with :ok <- check_sudo_available(),
-         :ok <- try_start_commands() do
+         {:ok, _} <- try_start_commands() do
       {:ok, "Redis service started"}
     else
       {:error, _} = err -> err
