@@ -217,6 +217,7 @@ defmodule Botica.BatteriesTest do
       # Smoke test: env-independent. Function must always return a
       # tagged tuple — never crash.
       result = Disk.check_disk("/", 99, 99)
+
       assert match?({:ok, _}, result) or match?({:warning, _}, result) or
                match?({:error, _}, result)
     end
