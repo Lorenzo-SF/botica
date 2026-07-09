@@ -36,8 +36,9 @@ defmodule Botica.MixProject do
 
   defp deps do
     [
-      {:apero, "~> 2.1.0"},
+      {:apero, "~> 3.0.0"},
       {:arrea, "~> 2.1.0"},
+      {:trebejo, path: "../trebejo"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
@@ -50,7 +51,7 @@ defmodule Botica.MixProject do
       main: "readme",
       source_url: "https://github.com/Lorenzo-SF/botica",
       homepage_url: "https://github.com/Lorenzo-SF/botica",
-      source_ref: "2.0.0",
+      source_ref: "3.0.0",
       extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"],
       groups_for_modules: [
         Core: [Botica, Botica.Doctor, Botica.Types],
