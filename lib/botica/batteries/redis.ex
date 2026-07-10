@@ -1,13 +1,13 @@
 defmodule Botica.Batteries.Redis do
-  alias Apero.Network
   alias Arrea.Command
+  alias Trebejo.Network
 
   @moduledoc """
   Predefined health check for Redis cache server.
 
   This module provides a ready-to-use check that verifies Redis
   is accessible. It prefers the `redis-cli` binary and falls back
-  to a raw TCP port check (via `Apero.Network.port_open?/3`) when
+  to a raw TCP port check (via `Trebejo.Network.port_open?/3`) when
   the binary is not installed.
 
   All command execution is routed through `Command.execute/2` so
@@ -62,7 +62,7 @@ defmodule Botica.Batteries.Redis do
   Checks if Redis is responding to PING.
 
   Uses `redis-cli` when available. Falls back to a TCP probe on
-  the configured port via `Apero.Network.port_open?/3` when the
+  the configured port via `Trebejo.Network.port_open?/3` when the
   binary is not installed.
   """
   @spec check_connection(String.t(), non_neg_integer()) :: Botica.Types.check_result()
