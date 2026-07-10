@@ -4,7 +4,7 @@ defmodule Botica.MixProject do
   def project do
     [
       app: :botica,
-      version: "2.0.0",
+      version: "2.1.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -36,9 +36,9 @@ defmodule Botica.MixProject do
 
   defp deps do
     [
-      {:apero, "~> 3.0.0"},
-      {:arrea, "~> 2.1.0"},
-      {:trebejo, path: "../trebejo"},
+      {:apero, "~> 3.1.0"},
+      {:arrea, "~> 2.2.0"},
+      {:trebejo, "~> 1.0.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
