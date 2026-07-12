@@ -37,7 +37,7 @@ defmodule Botica.MixProject do
   defp deps do
     [
       {:apero, path: "../apero"},
-      {:arrea, "~> 2.2.0"},
+      {:arrea, path: "../arrea", override: true},
       {:trebejo, path: "../trebejo"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
