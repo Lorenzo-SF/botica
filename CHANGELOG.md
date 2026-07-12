@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`Botica.Flags.Config`** — reads default flag definitions from
+  application config (`config :botica, :flags`).
+- **`Botica.Flags.Doc`** — generator that writes `docs/FLAGS.md` with
+  a markdown table of all registered flags.
+- **`botica:config`** — mix alias to run the doc generator.
+- **`Botica.Flags.Store`** now auto-loads defaults on start and emits
+  `[:botica, :flags, :put]` / `[:botica, :flags, :delete]` telemetry
+  events.
+
 ## [2.0.0] - 2026-07-07
 
 This entry consolidates everything between `1.0.0` and the current

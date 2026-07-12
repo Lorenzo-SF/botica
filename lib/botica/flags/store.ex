@@ -98,9 +98,16 @@ defmodule Botica.Flags.Store do
 
   @impl true
   def init(_opts) do
-    # :set + :public + :named_table + read_concurrency is the canonical
-    # "fast concurrent reads, serialised writes" combo.
+    # Create the ETS table with fast concurrent reads.
     :ets.new(@table, [:set, :named_table, :public, read_concurrency: true])
+
+    # Load defaults from application config on first startup, avoiding
+    # overriding any existing flags that may have been persisted.
+    if :ets.info(@table, :size) == 0 do
+      Botica.Flags.Config.get()
+      |> Enum.each(fn flag -> :ets.insert(@table, {flag.name, flag}) end)
+    end
+
     {:ok, %{writes: 0}}
   end
 
@@ -118,12 +125,14 @@ defmodule Botica.Flags.Store do
     }
 
     :ets.insert(@table, {fresh.name, fresh})
+    :telemetry.execute([:botica, :flags, :put], %{value: fresh}, %{})
     {:reply, :ok, %{state | writes: state.writes + 1}}
   end
 
   @impl true
   def handle_call({:delete, name}, _from, state) when is_atom(name) do
     :ets.delete(@table, name)
+    :telemetry.execute([:botica, :flags, :delete], %{name: name}, %{})
     {:reply, :ok, %{state | writes: state.writes + 1}}
   end
 

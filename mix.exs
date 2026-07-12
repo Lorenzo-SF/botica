@@ -19,6 +19,7 @@ defmodule Botica.MixProject do
         maintainers: ["Lorenzo Sánchez"]
       ],
       docs: docs(),
+      aliases: aliases(),
       test_coverage: [tool: ExCoveralls],
       dialyzer: dialyzer_config()
     ]
@@ -27,9 +28,6 @@ defmodule Botica.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      # Inicia el árbol de supervisión de Botica, incluyendo el GenServer
-      # de Flags (Botica.Flags.Store). Los consumidores pueden sobreescribir
-      # esto poniendo su propio módulo en Application.replace_env(:botica, :application_module, ...).
       mod: {Botica.Application, []}
     ]
   end
@@ -77,4 +75,11 @@ defmodule Botica.MixProject do
       flags: [:error_handling, :no_opaque, :no_underspecs]
     ]
   end
+
+  defp aliases do
+    [
+      "botica:config": ["run -e 'Botica.Flags.Doc.generate()'"]
+    ]
+  end
+
 end
