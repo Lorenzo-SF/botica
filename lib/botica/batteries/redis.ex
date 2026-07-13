@@ -117,8 +117,11 @@ defmodule Botica.Batteries.Redis do
   defp check_sudo_available do
     if Command.command_exists?("sudo") do
       case Util.run_cmd_legacy("sudo", ["-n", "true"]) do
-        {_, 0} -> :ok
-        _ -> {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
+        {_, 0} ->
+          :ok
+
+        _ ->
+          {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
       end
     else
       {:error, "sudo not found in PATH"}

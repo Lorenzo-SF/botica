@@ -377,25 +377,5 @@ defmodule Botica.Doctor do
 
   # Private functions
 
-  defp validate_config(config) do
-    cond do
-      not is_map(config) ->
-        {:error, "config must be a map"}
-
-      not Map.has_key?(config, :app_name) ->
-        {:error, "config.app_name must be a string"}
-
-      not is_binary(config.app_name) ->
-        {:error, "config.app_name must be a string"}
-
-      not Map.has_key?(config, :checks) ->
-        {:error, "config.checks must be a list"}
-
-      not is_list(config.checks) ->
-        {:error, "config.checks must be a list"}
-
-      true ->
-        :ok
-    end
-  end
+  defdelegate validate_config(config), to: Botica.Validation
 end

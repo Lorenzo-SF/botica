@@ -46,7 +46,7 @@ defmodule Botica.Flags.StoreTest do
     assert Store.count() == before
   end
 
-  test "put/1 emits telemetry event" do
+  setup do
     test_pid = self()
 
     :telemetry.attach_many(
@@ -58,6 +58,14 @@ defmodule Botica.Flags.StoreTest do
       nil
     )
 
+    on_exit(fn ->
+      :telemetry.detach(:botica_flags_test)
+    end)
+
+    :ok
+  end
+
+  test "put/1 emits telemetry event" do
     flag = Flag.new(:telemetry_test, default: true)
     Store.put(flag)
 
@@ -65,7 +73,5 @@ defmodule Botica.Flags.StoreTest do
 
     Store.delete(:telemetry_test)
     assert_receive {:telemetry, [:botica, :flags, :delete], %{name: :telemetry_test}}, 200
-  after
-    :telemetry.detach(:botica_flags_test)
   end
 end

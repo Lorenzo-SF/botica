@@ -146,7 +146,8 @@ defmodule Botica.Batteries.Memory do
 
   defp find_and_parse_page(lines, prefix) do
     case Enum.find(lines, fn l -> String.starts_with?(l, prefix) end) do
-      nil -> 0
+      nil ->
+        0
 
       line ->
         line

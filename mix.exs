@@ -81,5 +81,4 @@ defmodule Botica.MixProject do
       "botica:config": ["run -e 'Botica.Flags.Doc.generate()'"]
     ]
   end
-
 end

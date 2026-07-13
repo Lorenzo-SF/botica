@@ -89,21 +89,7 @@ defmodule Botica.Runner.Executor do
 
   # Private functions
 
-  defp validate_config(config) do
-    cond do
-      not is_map(config) ->
-        {:error, "config must be a map"}
-
-      not is_binary(Map.get(config, :app_name, "")) ->
-        {:error, "config.app_name must be a string"}
-
-      not is_list(Map.get(config, :checks, nil)) ->
-        {:error, "config.checks must be a list"}
-
-      true ->
-        :ok
-    end
-  end
+  defdelegate validate_config(config), to: Botica.Validation
 
   defp run_checks(checks, opts, run_opts) do
     timeout = Keyword.get(opts, :timeout, @default_timeout)

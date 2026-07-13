@@ -21,10 +21,12 @@ defmodule Botica.Flags.Doc do
       "|---|---|---|---|---|"
     ]
 
-    rows = Enum.map(flags, fn flag ->
-      rollout = if flag.rollout, do: "#{flag.rollout}%", else: "-"
-      "| #{inspect(flag.name)} | #{flag.enabled} | #{flag.default} | #{rollout} | #{flag.description || ""} |"
-    end)
+    rows =
+      Enum.map(flags, fn flag ->
+        rollout = if flag.rollout, do: "#{flag.rollout}%", else: "-"
+
+        "| #{inspect(flag.name)} | #{flag.enabled} | #{flag.default} | #{rollout} | #{flag.description || ""} |"
+      end)
 
     content = Enum.join(header ++ rows, "\n")
 
