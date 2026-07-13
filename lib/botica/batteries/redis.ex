@@ -1,6 +1,7 @@
 defmodule Botica.Batteries.Redis do
   alias Arrea.Command
   alias Trebejo.Network
+  alias Trebejo.Util
 
   @moduledoc """
   Predefined health check for Redis cache server.
@@ -10,16 +11,10 @@ defmodule Botica.Batteries.Redis do
   to a raw TCP port check (via `Trebejo.Network.port_open?/3`) when
   the binary is not installed.
 
-  All command execution is routed through `Command.execute/2` so
-  consumers get the full Arrea infra for free: real timeout
-  cancellation, validation, telemetry, shell handling, and the
-  sudo allowlist configured in `config/config.exs`.
-
-  ## Installation
-
-  Optional: install `redis-cli` (ships with the `redis-tools` /
-  `redis-server` packages on most distros). Without it, the battery
-  degrades to a raw TCP probe on the configured port.
+  All command execution uses arg lists — never interpolated into
+  shell strings — to prevent shell injection. Routed through
+  `Trebejo.Util.run_cmd_legacy/3` for consistent timeout handling
+  and structured errors.
 
   ## Usage
 
@@ -84,8 +79,6 @@ defmodule Botica.Batteries.Redis do
 
   Tries `systemctl start redis-server` first, falls back to
   `systemctl start redis` for distros that name the unit differently.
-  Requires sudo NOPASSWD configured for those systemctl calls
-  (see `config :arrea, :engine, sudo_allowlist` in `config/config.exs`).
   """
   @spec start_service() :: Botica.Types.fix_result()
   def start_service do
@@ -100,51 +93,38 @@ defmodule Botica.Batteries.Redis do
   # ── Private helpers ───────────────────────────────────────────────────────
 
   defp check_via_redis_cli(host, port) do
-    cmd = "redis-cli -h #{host} -p #{port} ping"
-
-    case Command.execute(cmd, timeout: 5_000, validate: false) do
-      {:ok, %{exit_code: 0, stdout: "PONG\r\n" <> _}} ->
+    case Util.run_cmd_legacy("redis-cli", ["-h", host, "-p", to_string(port), "ping"],
+           timeout: 5_000
+         ) do
+      {"PONG\r\n" <> _, 0} ->
         {:ok, "Redis is responding at #{host}:#{port}"}
 
-      {:ok, %{exit_code: 0, stdout: "PONG\n" <> _}} ->
+      {"PONG\n" <> _, 0} ->
         {:ok, "Redis is responding at #{host}:#{port}"}
 
-      {:ok, %{exit_code: 0, stdout: stdout}} ->
-        # redis-cli on success sometimes prints "PONG" without trailing newline
-        if String.trim(stdout) == "PONG" do
+      {output, 0} ->
+        if String.trim(output) == "PONG" do
           {:ok, "Redis is responding at #{host}:#{port}"}
         else
-          {:error, "Redis unexpected output: #{String.trim(stdout)}"}
+          {:error, "Redis unexpected output: #{String.trim(output)}"}
         end
 
-      {:ok, %{exit_code: code, stdout: output}} ->
+      {output, code} ->
         {:error, "Redis not responding (exit #{code}): #{String.trim(output)}"}
-
-      {:error, :timeout} ->
-        {:error, "Redis check timed out at #{host}:#{port}"}
-
-      {:error, reason} ->
-        {:error, "Redis check failed: #{inspect(reason)}"}
     end
   end
 
   defp check_sudo_available do
     if Command.command_exists?("sudo") do
-      case Command.execute("sudo -n true", validate: false) do
-        {:ok, %{exit_code: 0}} ->
-          :ok
-
-        _ ->
-          {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
+      case Util.run_cmd_legacy("sudo", ["-n", "true"]) do
+        {_, 0} -> :ok
+        _ -> {:error, "sudo requires a password or is not available. Configure NOPASSWD in sudoers."}
       end
     else
       {:error, "sudo not found in PATH"}
     end
   end
 
-  # Try multiple systemctl unit names because different distros name
-  # the redis service differently (redis-server on Debian/Ubuntu,
-  # redis on RHEL/Fedora/Arch).
   defp try_start_commands do
     units = ["redis-server", "redis"]
     results = Enum.map(units, &try_start_unit/1)
@@ -156,15 +136,12 @@ defmodule Botica.Batteries.Redis do
   end
 
   defp try_start_unit(unit) do
-    case Command.execute("sudo systemctl start #{unit}", timeout: 30_000) do
-      {:ok, %{exit_code: 0}} ->
+    case Util.run_cmd_legacy("sudo", ["systemctl", "start", unit], timeout: 30_000) do
+      {_, 0} ->
         {:ok, "Redis service started (unit: #{unit})"}
 
-      {:ok, %{exit_code: code, stdout: output}} ->
+      {output, code} ->
         {:error, {:unit, unit, code, String.trim(output)}}
-
-      {:error, reason} ->
-        {:error, {:unit, unit, nil, inspect(reason)}}
     end
   end
 

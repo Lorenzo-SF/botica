@@ -1,6 +1,6 @@
 defmodule Botica.Batteries.Memory do
   alias Apero.OS
-  alias Arrea.Command
+  alias Trebejo.Util
 
   @moduledoc """
   Predefined health check for system memory usage.
@@ -10,8 +10,8 @@ defmodule Botica.Batteries.Memory do
 
   Uses `Apero.OS.type/0` to dispatch directly between Linux (`free`)
   and macOS (`vm_stat`) instead of a blind fallback. All command
-  execution is routed through `Command.execute/2` so consumers get
-  real timeout cancellation, telemetry, and structured errors.
+  execution is routed through `Trebejo.Util.run_cmd_legacy/3` with
+  arg lists for consistent timeout handling and structured errors.
 
   ## Usage
 
@@ -66,44 +66,26 @@ defmodule Botica.Batteries.Memory do
   # ── Private ────────────────────────────────────────────────────────────────
 
   defp check_linux_memory(warning_threshold, error_threshold) do
-    # Read /proc/meminfo directly. It's the canonical Linux memory
-    # interface (always present, locale-independent) and gives us
-    # both MemTotal and MemAvailable in a stable format. Using `free`
-    # instead is locale-dependent (Spanish/French/etc hosts break the
-    # parser) and its modern short format (Mem: ...) doesn't expose
-    # MemAvailable explicitly.
-    case Command.execute("cat /proc/meminfo", timeout: 5_000, validate: false) do
-      {:ok, %{exit_code: 0, stdout: output}} ->
+    case Util.run_cmd_legacy("cat", ["/proc/meminfo"], timeout: 5_000) do
+      {output, 0} ->
         parse_linux_memory(output, warning_threshold, error_threshold)
 
-      {:ok, %{exit_code: code, stdout: output}} ->
+      {output, code} ->
         {:error, "/proc/meminfo read failed (exit #{code}): #{String.trim(output)}"}
-
-      {:error, :timeout} ->
-        {:error, "Memory check timed out (cat /proc/meminfo)"}
-
-      {:error, reason} ->
-        {:error, "/proc/meminfo read failed: #{inspect(reason)}"}
     end
   end
 
   defp check_macos_memory(warning_threshold, error_threshold) do
-    case Command.execute("vm_stat", timeout: 5_000, validate: false) do
-      {:ok, %{exit_code: 0, stdout: output}} ->
+    case Util.run_cmd_legacy("vm_stat", [], timeout: 5_000) do
+      {output, 0} ->
         parse_macos_memory(output, warning_threshold, error_threshold)
 
-      {:ok, %{exit_code: code, stdout: output}} ->
+      {output, code} ->
         {:error, "vm_stat exited #{code}: #{String.trim(output)}"}
-
-      {:error, :timeout} ->
-        {:error, "Memory check timed out (vm_stat)"}
-
-      {:error, reason} ->
-        {:error, "vm_stat failed: #{inspect(reason)}"}
     end
   end
 
-  # ── Linux parsing (/proc/meminfo via free) ────────────────────────────────
+  # ── Linux parsing (/proc/meminfo via cat) ─────────────────────────────────
 
   defp parse_linux_memory(output, warning_threshold, error_threshold) do
     lines = String.split(output, "\n", trim: true)
@@ -164,8 +146,7 @@ defmodule Botica.Batteries.Memory do
 
   defp find_and_parse_page(lines, prefix) do
     case Enum.find(lines, fn l -> String.starts_with?(l, prefix) end) do
-      nil ->
-        0
+      nil -> 0
 
       line ->
         line
