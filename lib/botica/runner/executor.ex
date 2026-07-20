@@ -71,13 +71,13 @@ defmodule Botica.Runner.Executor do
   defdelegate validate_config(config), to: Botica.Validation
 
   defp run_checks(checks, opts, run_opts) do
-    timeout = Keyword.get(opts, :timeout, @default_timeout)
+    effective_timeout = Keyword.get(opts, :timeout, @default_timeout)
     continue_on_error = Keyword.get(run_opts, :continue_on_error, true)
     stop_on_first_error = Keyword.get(run_opts, :stop_on_first_error, false)
 
     funs =
       Enum.map(checks, fn check ->
-        check_timeout = Map.get(check, :timeout, timeout)
+        check_timeout = Map.get(check, :timeout, effective_timeout)
         fn -> execute_single_check(check, check_timeout) end
       end)
 
@@ -95,7 +95,7 @@ defmodule Botica.Runner.Executor do
           funs
           |> Task.async_stream(fn fun -> fun.() end,
             max_concurrency: max_concurrency,
-            timeout: timeout + 1_000,
+            timeout: effective_timeout + 1_000,
             ordered: true
           )
           |> Enum.map(fn
@@ -103,7 +103,7 @@ defmodule Botica.Runner.Executor do
             {:exit, reason} -> {:error, %{error: reason}}
           end)
 
-        results = process_results(checks, raw_results)
+        results = process_results(checks, raw_results, effective_timeout)
         {:ok, results}
     end
   end
@@ -198,20 +198,20 @@ defmodule Botica.Runner.Executor do
     if is_struct(term, Exception), do: term, else: RuntimeError.exception(inspect(term))
   end
 
-  defp process_results(checks, raw_results) do
+  defp process_results(checks, raw_results, effective_timeout) do
     checks
     |> Enum.zip(raw_results)
-    |> Enum.map(fn {check, raw} -> resolve_result(check, raw) end)
+    |> Enum.map(fn {check, raw} -> resolve_result(check, raw, effective_timeout) end)
   end
 
-  defp resolve_result(_check, {:ok, result}) when is_map(result), do: result
-  defp resolve_result(check, {:error, %{error: :timeout}}), do: Result.from_timeout(check, @default_timeout)
+  defp resolve_result(_check, {:ok, result}, _timeout) when is_map(result), do: result
+  defp resolve_result(check, {:error, %{error: :timeout}}, timeout), do: Result.from_timeout(check, timeout)
 
-  defp resolve_result(check, {:error, %{error: exc}}) do
+  defp resolve_result(check, {:error, %{error: exc}}, _timeout) do
     Result.from_exception(check, to_exception(exc))
   end
 
-  defp resolve_result(check, other) do
+  defp resolve_result(check, other, _timeout) do
     Result.build(check, :error, "unexpected: #{inspect(other)}")
   end
 end

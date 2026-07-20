@@ -12,7 +12,8 @@ defmodule Botica.Flags.Doc do
   def generate do
     flags = Botica.Flags.all()
 
-    write_path = Path.join([__DIR__, "..", "docs", "FLAGS.md"])
+    priv_dir = Application.app_dir(:botica, "priv")
+    write_path = Path.join(priv_dir, "docs/FLAGS.md")
 
     header = [
       "# Flags",
@@ -30,6 +31,7 @@ defmodule Botica.Flags.Doc do
 
     content = Enum.join(header ++ rows, "\n")
 
+    File.mkdir_p!(Path.dirname(write_path))
     File.write!(write_path, content)
   end
 end

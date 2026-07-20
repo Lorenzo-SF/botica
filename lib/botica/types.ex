@@ -40,7 +40,7 @@ defmodule Botica.Types do
           name: String.t(),
           description: String.t(),
           priority: non_neg_integer(),
-          tags: [atom()] | [],
+          tags: [atom()],
           timeout: non_neg_integer() | nil,
           check: (-> check_result),
           fix: (-> fix_result) | nil,

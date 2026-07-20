@@ -46,15 +46,20 @@ defmodule Botica.Flags.StoreTest do
     assert Store.count() == before
   end
 
+  # Named handler to avoid anonymous functions in telemetry.attach
+  defp telemetry_handler(test_pid) do
+    fn event_name, measurements, _metadata, _config ->
+      send(test_pid, {:telemetry, event_name, measurements})
+    end
+  end
+
   setup do
     test_pid = self()
 
     :telemetry.attach_many(
       :botica_flags_test,
       [[:botica, :flags, :put], [:botica, :flags, :delete]],
-      fn event_name, measurements, _metadata, _config ->
-        send(test_pid, {:telemetry, event_name, measurements})
-      end,
+      telemetry_handler(test_pid),
       nil
     )
 

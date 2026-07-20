@@ -113,26 +113,29 @@ defmodule Botica.Flags.Store do
 
   @impl true
   def handle_call({:put, %Botica.Flags.Flag{} = flag}, _from, state) do
-    # Refresh updated_at on every write so introspection sees when the flag
-    # last changed state. Use :erlang.system_time(:microsecond) so back-to-back
-    # writes within the same second still get distinct timestamps (DateTime.utc_now/0
-    # truncated to :second collides on fast systems).
-    fresh = %{
-      flag
-      | updated_at:
-          :erlang.system_time(:microsecond)
-          |> DateTime.from_unix!(:microsecond)
-    }
+    # Preserve created_at if flag already exists (TOCTOU fix).
+    # Also always refresh updated_at atomically in the GenServer.
+    created_at =
+      case :ets.lookup(@table, flag.name) do
+        [{_name, existing}] -> existing.created_at
+        [] -> flag.created_at
+      end
+
+    now =
+      :erlang.system_time(:microsecond)
+      |> DateTime.from_unix!(:microsecond)
+
+    fresh = %{flag | created_at: created_at, updated_at: now}
 
     :ets.insert(@table, {fresh.name, fresh})
-    :telemetry.execute([:botica, :flags, :put], %{value: fresh}, %{})
+    _ = Task.start(fn -> :telemetry.execute([:botica, :flags, :put], %{value: fresh}, %{}) end)
     {:reply, :ok, %{state | writes: state.writes + 1}}
   end
 
   @impl true
   def handle_call({:delete, name}, _from, state) when is_atom(name) do
     :ets.delete(@table, name)
-    :telemetry.execute([:botica, :flags, :delete], %{name: name}, %{})
+    _ = Task.start(fn -> :telemetry.execute([:botica, :flags, :delete], %{name: name}, %{}) end)
     {:reply, :ok, %{state | writes: state.writes + 1}}
   end
 
@@ -140,4 +143,8 @@ defmodule Botica.Flags.Store do
   def handle_call(:stats, _from, state) do
     {:reply, %{writes: state.writes, count: count()}, state}
   end
+
+  # Catch-all for unexpected messages — ignore them silently.
+  @impl true
+  def handle_info(_msg, state), do: {:noreply, state}
 end
