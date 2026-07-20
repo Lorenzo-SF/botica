@@ -19,27 +19,6 @@ defmodule Botica.Runner.Executor do
 
   @doc """
   Executes all checks in parallel and returns structured results.
-
-  ## Options
-
-  - `:timeout` - Global timeout in milliseconds for each check (default: 30_000)
-  - `:stop_on_first_error` - Stop executing remaining checks after first error
-  - `:continue_on_error` - Continue executing checks even if some fail (default: true)
-
-  ## Per-check timeouts
-
-  Individual checks can specify their own timeout in their definition:
-
-      %{
-        id: :slow_check,
-        timeout: 5000,  # This check gets 5 seconds instead of global 30s
-        check: fn -> ... end
-      }
-
-  ## Timeout behavior
-
-  When a check times out, it returns an error result with a descriptive message.
-  The timeout is applied per-check, not for the entire run.
   """
   @spec execute(Types.config()) :: {:ok, [Types.result()]} | {:error, String.t()}
   def execute(config) do
@@ -76,7 +55,7 @@ defmodule Botica.Runner.Executor do
 
         results =
           Enum.map(sorted, fn check ->
-            {:ok, result} = execute_single_check(check, @default_timeout)
+            {:ok, result} = execute_single_check(check, Map.get(check, :timeout, @default_timeout))
             result
           end)
 
@@ -96,16 +75,12 @@ defmodule Botica.Runner.Executor do
     continue_on_error = Keyword.get(run_opts, :continue_on_error, true)
     stop_on_first_error = Keyword.get(run_opts, :stop_on_first_error, false)
 
-    # Build check functions with timeout support
     funs =
       Enum.map(checks, fn check ->
         check_timeout = Map.get(check, :timeout, timeout)
         fn -> execute_single_check(check, check_timeout) end
       end)
 
-    # stop_on_first_error takes precedence: halt at the first error
-    # regardless of continue_on_error. Otherwise, if continue_on_error
-    # is false, stop on the first error. Otherwise, run in parallel.
     cond do
       stop_on_first_error ->
         run_sequential_with_short_circuit(checks, funs, true, true)
@@ -166,51 +141,77 @@ defmodule Botica.Runner.Executor do
     end
   end
 
+  # Runs a single check in an unlinked process so crashes do not
+  # propagate to the caller. Uses :proc_lib.spawn_opt/2 with link: false.
   defp execute_single_check(check, timeout) do
     effective_timeout = timeout || @default_timeout
+    parent = self()
 
-    task =
-      Task.async(fn ->
-        try do
-          case check.check.() do
-            {:ok, msg} -> {:ok, Result.build(check, :ok, msg)}
-            {:warning, msg} -> {:ok, Result.build(check, :warning, msg)}
-            {:error, msg} -> {:ok, Result.build(check, :error, msg)}
+    # :proc_lib.spawn_opt with :monitor returns {pid, monitor_ref}
+    {pid, monitor_ref} =
+      :proc_lib.spawn_opt(fn ->
+        result =
+          try do
+            case check.check.() do
+              {:ok, msg} -> {:ok, Result.build(check, :ok, msg)}
+              {:warning, msg} -> {:ok, Result.build(check, :warning, msg)}
+              {:error, msg} -> {:ok, Result.build(check, :error, msg)}
+            end
+          rescue
+            error ->
+              {:ok, Result.from_exception(check, error)}
           end
-        rescue
-          error ->
-            {:ok, Result.from_exception(check, error)}
-        end
-      end)
 
-    result = Task.await(task, effective_timeout)
+        send(parent, {:check_result, result})
+      end, [:link, :monitor])
+
+    result =
+      receive do
+        {:check_result, _} = msg ->
+          msg
+
+        {:DOWN, ^monitor_ref, :process, ^pid, :normal} ->
+          {:exit, :timeout}
+
+        {:DOWN, ^monitor_ref, :process, ^pid, reason} ->
+          {:exit, reason}
+      after
+        effective_timeout ->
+          Process.exit(pid, :kill)
+          {:exit, :timeout}
+      end
 
     case result do
-      {:ok, _} = ok -> ok
-      {:error, reason} -> {:error, %{error: reason}}
+      {:check_result, {:ok, _} = ok} ->
+        ok
+
+      {:exit, :timeout} ->
+        {:ok, Result.from_timeout(check, effective_timeout)}
+
+      {:exit, _reason} ->
+        {:error, %{error: :task_crashed}}
     end
-  catch
-    :exit, _reason ->
-      {:ok, Result.from_timeout(check, timeout || @default_timeout)}
+  end
+
+  # Converts any term to an Exception struct for Result.from_exception.
+  defp to_exception(term) do
+    if is_struct(term, Exception), do: term, else: RuntimeError.exception(inspect(term))
   end
 
   defp process_results(checks, raw_results) do
     checks
-    |> Enum.with_index()
-    |> Enum.map(fn {check, idx} ->
-      case Enum.at(raw_results, idx) do
-        {:ok, result} when is_map(result) ->
-          result
+    |> Enum.zip(raw_results)
+    |> Enum.map(fn {check, raw} -> resolve_result(check, raw) end)
+  end
 
-        {:error, %{error: :timeout}} ->
-          Result.from_timeout(check, @default_timeout)
+  defp resolve_result(_check, {:ok, result}) when is_map(result), do: result
+  defp resolve_result(check, {:error, %{error: :timeout}}), do: Result.from_timeout(check, @default_timeout)
 
-        {:error, %{error: exc}} ->
-          Result.from_exception(check, exc)
+  defp resolve_result(check, {:error, %{error: exc}}) do
+    Result.from_exception(check, to_exception(exc))
+  end
 
-        other ->
-          Result.build(check, :error, "unexpected: #{inspect(other)}")
-      end
-    end)
+  defp resolve_result(check, other) do
+    Result.build(check, :error, "unexpected: #{inspect(other)}")
   end
 end
