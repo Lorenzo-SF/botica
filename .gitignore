@@ -52,3 +52,6 @@ Thumbs.db
 # --- Dialyzer PLTs ---
 /priv/plts/
 graphify-out/
+
+# --- Generated FLAGS.md (output of `mix botica:config`) ---
+/lib/botica/docs/
