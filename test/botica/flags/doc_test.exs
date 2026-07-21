@@ -1,6 +1,7 @@
 defmodule Botica.Flags.DocTest do
   use ExUnit.Case, async: false
 
+  alias Botica.Flags
   alias Botica.Flags.{Doc, Store}
 
   setup do
@@ -30,7 +31,7 @@ defmodule Botica.Flags.DocTest do
     end
 
     test "includes flag name and status in generated table" do
-      Botica.Flags.define(:test_doc_flag, default: true, description: "A test flag")
+      Flags.define(:test_doc_flag, default: true, description: "A test flag")
       assert Doc.generate() == :ok
       content = File.read!(doc_path())
       assert content =~ ":test_doc_flag"

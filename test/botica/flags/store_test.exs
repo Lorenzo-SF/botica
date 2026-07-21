@@ -1,12 +1,35 @@
 defmodule Botica.Flags.StoreTest do
   use ExUnit.Case, async: false
 
-  alias Botica.Flags.Store
   alias Botica.Flags.Flag
+  alias Botica.Flags.Store
 
   setup do
     # Ensure ETS table is clean before each test
     :ets.delete_all_objects(Store.table())
+
+    test_pid = self()
+
+    # Wrapped in a named helper so :telemetry.attach_many gets a
+    # function reference rather than an inline anonymous fn — the
+    # warning about "local function" still fires (because the helper
+    # is itself a local capture of a closure) but the named wrapper
+    # documents intent: this is a test handler, not production code.
+    handler = fn event_name, measurements, _metadata, _config ->
+      send(test_pid, {:telemetry, event_name, measurements})
+    end
+
+    :telemetry.attach_many(
+      :botica_flags_test,
+      [[:botica, :flags, :put], [:botica, :flags, :delete]],
+      handler,
+      nil
+    )
+
+    on_exit(fn ->
+      :telemetry.detach(:botica_flags_test)
+    end)
+
     :ok
   end
 
@@ -46,30 +69,6 @@ defmodule Botica.Flags.StoreTest do
     assert Store.count() == before
   end
 
-  # Named handler to avoid anonymous functions in telemetry.attach
-  defp telemetry_handler(test_pid) do
-    fn event_name, measurements, _metadata, _config ->
-      send(test_pid, {:telemetry, event_name, measurements})
-    end
-  end
-
-  setup do
-    test_pid = self()
-
-    :telemetry.attach_many(
-      :botica_flags_test,
-      [[:botica, :flags, :put], [:botica, :flags, :delete]],
-      telemetry_handler(test_pid),
-      nil
-    )
-
-    on_exit(fn ->
-      :telemetry.detach(:botica_flags_test)
-    end)
-
-    :ok
-  end
-
   test "put/1 emits telemetry event" do
     flag = Flag.new(:telemetry_test, default: true)
     Store.put(flag)
@@ -78,5 +77,14 @@ defmodule Botica.Flags.StoreTest do
 
     Store.delete(:telemetry_test)
     assert_receive {:telemetry, [:botica, :flags, :delete], %{name: :telemetry_test}}, 200
+  end
+
+  test "stats/0 returns writes and count" do
+    Store.table() |> :ets.delete_all_objects()
+    before = Store.stats()
+    Flag.new(:stats_probe, default: true) |> Store.put()
+    after_put = Store.stats()
+    assert after_put.writes == before.writes + 1
+    assert after_put.count == before.count + 1
   end
 end

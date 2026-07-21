@@ -34,6 +34,11 @@ defmodule Botica.MixProject do
 
   defp deps do
     [
+      # Path-only deps: apero / arrea / trebejo are sibling workspaces
+      # inside this monorepo. They are intentionally NOT pinned to a
+      # hex version because the published versions lag behind the
+      # monorepo. For external consumers, replace these `path:` entries
+      # with the equivalent hex ranges.
       {:apero, path: "../apero"},
       {:arrea, path: "../arrea", override: true},
       {:trebejo, path: "../trebejo"},
@@ -49,7 +54,7 @@ defmodule Botica.MixProject do
       main: "readme",
       source_url: "https://github.com/Lorenzo-SF/botica",
       homepage_url: "https://github.com/Lorenzo-SF/botica",
-      source_ref: "3.0.0",
+      source_ref: "2.1.0",
       extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"],
       groups_for_modules: [
         Core: [Botica, Botica.Doctor, Botica.Types],
