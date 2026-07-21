@@ -1,0 +1,265 @@
+# Botica v2.1.0 — Plan de Ejecución
+
+> **Última actualización**: 2026-07-21
+> **Auditoría original**: `AUDIT.md` (2026-07-19)
+> **Auditoría complementaria**: revisión tras batch de calidad (2026-07-21)
+> **Estado**: 5/5 comandos pasan. 5 bugs runtime confirmados y arreglados. Pendientes: cobertura + refactors.
+
+---
+
+## 0. Estado actual (verificado 2026-07-21)
+
+| Check | Resultado |
+|-------|-----------|
+| `mix format --check-formatted` | ✅ 0 cambios |
+| `mix compile --warnings-as-errors` | ✅ 0 warnings |
+| `mix credo --strict --format=json` | ✅ 0 issues |
+| `mix test --cover` | ✅ 137 tests, 0 fail, coverage **72.5%** |
+| `mix dialyzer` | ✅ 0 errors |
+
+CHANGELOG `[Unreleased]` actualizado. Git history normalizado.
+
+---
+
+## 1. Resumen
+
+| Severidad | Total | Realizadas | Pendientes |
+|-----------|-------|------------|------------|
+| 🔴 P0 | 5 (runtime bugs) | 5 | 0 |
+| 🟠 P1 | 4 | 3 | 1 |
+| 🟡 P2 | 4 | 1 | 3 |
+| 🟢 P3 | 1 | 1 | 0 |
+| **Refactors estructurales** | — | — | 2 |
+| **Coverage gaps** | — | — | 3 |
+| **Total tareas** | **14 + 5** | **11** | **8** |
+
+**Esfuerzo restante estimado**: ~14h (refactors + tests).
+
+---
+
+## 2. Tareas realizadas en este batch — BUGS RUNTIME CRÍTICOS
+
+### ✅ BOT-01: `Result.from_exception` handles non-Exception terms
+- **Commit**: `e97c127` (regression tests) + fix
+- **Verificado**: reproducer confirma bug
+- **Fix**: maneja terms no-Exception correctamente
+
+### ✅ BOT-02: Fix crash isolation con `:link, :monitor`
+- **Commit**: `01898f0` ("fix(botica): isolate check crashes, demonitor :DOWN, tag result messages")
+- **Bugs encontrados via reproducer**:
+  1. `execute_single_check/2` pasaba `[:link, :monitor]` aunque decía ser unlinked → caller moría con `:boom`
+  2. `:DOWN` messages leak al caller mailbox tras checks exitosos
+  3. Mensajes `{:check_result, _}` sin tag de check → stale results consumidos por checks posteriores
+- **Fixes aplicados**:
+  - Drop `:link` de `:proc_lib.spawn_opt` opts (`executor.ex:182`)
+  - `Process.demonitor(ref, [:flush])` después de cada receive
+  - Tagged messages con `make_ref/0`
+  - Drain leftovers tras kill
+
+### ✅ BOT-03: Thread `timeout` through `process_results/3`
+- **Commit**: `d6c05e9` (parte del fix de BOT-02)
+- **Fix**: timeout now threaded para accurate timeout error messages
+
+### ✅ BOT-04: Per-check timeout via `Map.get`
+- **Commit**: `d6c05e9` ("fix(botica): reject empty checks list in validate_config")
+- **Fix**: `execute_sequential` usa `Map.get(check, :timeout, effective_timeout)` por check
+
+### ✅ BOT-05: Reject empty checks list
+- **Commit**: `d6c05e9`
+- **Fix**: `Validation.validate_config/1` rechaza `checks: []` con `{:error, "config.checks must contain at least one check"}`
+- **Doctest + assertions actualizados**
+
+### ✅ BOT-06: TOCTOU race fix
+- **Commit**: parte del batch
+- **Fix**: `created_at` preservation movido a GenServer `handle_call` (evita race entre read y write)
+
+### ✅ BOT-07: `telemetry.execute` wrapped in `Task.start`
+- **Commit**: parte del batch
+- **Fix**: telemetry no bloquea el GenServer
+- **Nota**: orden nondeterminista sigue siendo issue (ver BOT-PENDING)
+
+### ✅ BOT-09: `handle_info` catch-all
+- **Commit**: parte del batch
+- **Fix**: añade catch-all handler para mensajes inesperados
+
+### ✅ BOT-10: `tags: [atom()] | []` → `tags: [atom()]`
+- **Commit**: parte del batch
+- **Fix**: type spec corregido en `lib/botica/types.ex`
+
+### ✅ BOT-11: Tests para `Doc.generate/0`
+- **Commit**: parte del batch
+- **Tests**: 2 nuevos tests para `Doc.generate/0`
+
+### ✅ BOT-12: Named `telemetry_handler/1`
+- **Commit**: parte del batch
+- **Fix**: handler named function en lugar de anonymous closure
+
+### ✅ Extras
+- **`Flags.Store.stats/0` API pública** (commit `4442c58`): handler `:stats` ahora accesible
+- **`mix.exs` version alignment** (commit `af7810a`): source_ref a 2.1.0
+- **5s `GenServer.call` timeout** explícito
+- **17 `@doc` strings** añadidos (commit `ba3749d`)
+- **14 regression tests** nuevos (commit `e97c127`)
+- **README + CHANGELOG** actualizados
+
+---
+
+## 3. Tareas pendientes
+
+### BOT-13: Rename `timeout` variable en `run_checks/3`
+- **Estado**: pendiente (revisión mía; en mi git ya lo renombré a `effective_timeout`)
+- **Verificar**: que el commit esté aplicado
+- **Commit relacionado**: parte de `d6c05e9` (BOT-02 fix batch)
+
+### BOT-14: Documentar delegaciones en `Botica`
+- **Estado**: pendiente (cubierto parcialmente por `ba3749d` con 17 @doc)
+- **Pendiente**: revisar si hay delegaciones sin documentar
+
+### BOT-08: Tests para `Memory` battery
+- **Commit**: tests creados (`test/botica/batteries/memory_test.exs`)
+- **Estado**: completado (3 tests básicos)
+
+---
+
+## 4. Refactors estructurales
+
+### BOT-15: Split `lib/botica/doctor.ex` (382 líneas)
+- **Hallazgo**: **god-module de 382 líneas** con orquestación completa del doctor
+- **Severidad**: 🟡 Estructural
+- **Ficheros**:
+  - `lib/botica/doctor.ex` (382 líneas)
+  - `lib/botica/doctor/` (nuevo)
+- **Esfuerzo estimado**: 4-6h
+- **Análisis estructural actual**:
+  - Orquestación: `run/2`, `run_all/2`, `run_checks/3`
+  - Validación: integración con `Validation`
+  - Reporting: `format_report/2`, `format_results/2`
+  - Estado: setup + cleanup
+- **Plan de split**:
+  - `doctor.ex` (~80 líneas): fachada pública
+  - `doctor/runner.ex` (~150 líneas): orquestación de checks
+  - `doctor/reporter.ex` (~120 líneas): formateo de resultados
+  - `doctor/state.ex` (~80 líneas): estado y lifecycle
+
+---
+
+### BOT-16: Split `lib/botica/runner/executor.ex` (249 líneas)
+- **Hallazgo**: 249 líneas con toda la lógica de ejecución
+- **Severidad**: 🟡 Estructural
+- **Ficheros**:
+  - `lib/botica/runner/executor.ex` (249 líneas)
+- **Esfuerzo estimado**: 3-4h
+- **Análisis**:
+  - `run_checks/3` (37 líneas) — orquestación
+  - `execute_single_check/2` (49 líneas) — ejecución individual
+  - `run_sequential_with_short_circuit/4` (helper)
+  - `resolve_result/3` (varias cláusulas) — pattern matching
+  - `process_results/3` — agregación
+- **Plan de split**:
+  - `executor.ex` (~60 líneas): fachada
+  - `executor/single.ex` (~80 líneas): `execute_single_check/2`
+  - `executor/sequential.ex` (~60 líneas): `run_sequential_with_short_circuit/4`
+  - `executor/result.ex` (~60 líneas): `resolve_result/3`, `process_results/3`
+
+---
+
+## 5. Coverage gaps (subir de 72.5% → 85%+)
+
+### BOT-17: Tests para `Flags.Store` (race conditions)
+- **Ficheros**: `test/botica/flags/store_test.exs` (ampliar)
+- **Esfuerzo**: 2h
+- **Plan**:
+  - Tests de concurrencia (Task.async con muchos writers)
+  - Tests de demonitor tras GenServer crash
+  - Tests de stats/0 después de N puts
+
+### BOT-18: Tests para `Repair.Fixer`
+- **Ficheros**: `test/botica/repair/fixer_test.exs` (verificar)
+- **Esfuerzo**: 1h
+
+### BOT-19: Tests para `Redis` battery
+- **Ficheros**: `test/botica/batteries/redis_test.exs`
+- **Esfuerzo**: 1h
+
+---
+
+## 6. Issues de diseño pendientes (NO bugs, deuda técnica)
+
+### BOT-PENDING-1: ETS table `:public` (no `:protected`)
+- **Issue**: tabla ETS es `:public`, cualquier proceso puede bypass del GenServer
+- **Trade-off**: `:public` permite reads directos O(1) sin GenServer round-trip. `:protected` requeriría GenServer.call para reads, matando la perf.
+- **Decisión recomendada**: **mantener `:public` con comentario documentando por qué** + helper functions que sean la API recomendada
+- **Ficheros**: `lib/botica/flags/store.ex:7-12,102`
+- **Esfuerzo**: 30 min (solo docs + tests)
+
+### BOT-PENDING-2: Telemetry fire-and-forget unsupervised
+- **Issue**: `telemetry.execute` wrapped en `Task.start(fn -> ... end)` — orden nondeterminista, eventos se pierden en shutdown
+- **Trade-off**: in-process (sync) bloquea GenServer; supervised (Task.Supervisor) requiere setup extra
+- **Decisión recomendada**: usar `Task.Supervisor` o documentar que ordering es best-effort
+- **Ficheros**: `lib/botica/flags/store.ex:131,138`
+- **Esfuerzo**: 1h (cambiar a Task.Supervisor + config)
+
+### BOT-PENDING-3: Path-only sibling deps
+- **Issue**: `mix.exs:37-39` tiene path deps que no funcionan para non-local builds
+- **Decisión recomendada**: convertir a hex deps cuando estén publicadas, o documentar la limitación
+- **Esfuerzo**: depende (publicar en hex vs documentar)
+
+### BOT-PENDING-4: ETS write serialization not enforced
+- **Issue**: ETS table `:public` permite writes directos saltándose el GenServer
+- **Trade-off**: igual que BOT-PENDING-1
+- **Decisión recomendada**: igual que BOT-PENDING-1
+
+### BOT-PENDING-5: `:stats` handler had no caller
+- **Status**: YA RESUELTO en este batch (BOT-extra `4442c58`)
+
+### BOT-PENDING-6: `mix.exs` source_ref misalignment
+- **Status**: YA RESUELTO en este batch (commit `af7810a`)
+
+---
+
+## 7. Dependencias externas
+
+| Tarea | Dependencia |
+|-------|-------------|
+| BOT-15..16 | arrea (potencialmente), mavis |
+| BOT-17..19 | ninguna |
+
+Botica **no depende de otros proyectos lorenzo-sf en runtime**.
+
+---
+
+## 8. Riesgos globales
+
+1. **BOT-15/16 refactors**: módulos core. Branch dedicada + tests exhaustivos.
+2. **BOT-PENDING-1/2 ETS + telemetry**: decisiones de diseño que requieren input del usuario. Documentar trade-offs.
+3. **Coverage gaps**: 27.5% del código sin tests. Mejora continua.
+
+---
+
+## 9. Comandos de verificación
+
+```bash
+mix format --check-formatted
+mix compile --warnings-as-errors
+mix credo --strict --format=json
+mix test --cover                    # objetivo: ≥85%
+mix dialyzer
+```
+
+---
+
+## 10. CHANGELOG bullets para próximos lotes
+
+Bajo `[Unreleased]`:
+
+### Changed
+- `Botica.Doctor` split into Runner/Reporter/State (BOT-15)
+- `Botica.Runner.Executor` split into Single/Sequential/Result (BOT-16)
+
+### Added
+- Tests para `Flags.Store` race conditions (BOT-17)
+- Tests para `Repair.Fixer` (BOT-18)
+- Tests para `Redis` battery (BOT-19)
+- `Task.Supervisor` para telemetry (BOT-PENDING-2)
+
+NO bumpear versión.
