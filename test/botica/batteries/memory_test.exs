@@ -24,7 +24,8 @@ defmodule Botica.Batteries.MemoryTest do
       result = Memory.check_memory(80, 95)
       # The function should return an error for unsupported OS
       # since it dispatches based on OS.type()
-      assert match?({:error, _}, result) or match?({:warning, _}, result) or match?({:ok, _}, result)
+      assert match?({:error, _}, result) or match?({:warning, _}, result) or
+               match?({:ok, _}, result)
     end
   end
 end

@@ -55,7 +55,9 @@ defmodule Botica.Runner.Executor do
 
         results =
           Enum.map(sorted, fn check ->
-            {:ok, result} = execute_single_check(check, Map.get(check, :timeout, @default_timeout))
+            {:ok, result} =
+              execute_single_check(check, Map.get(check, :timeout, @default_timeout))
+
             result
           end)
 
@@ -149,21 +151,24 @@ defmodule Botica.Runner.Executor do
 
     # :proc_lib.spawn_opt with :monitor returns {pid, monitor_ref}
     {pid, monitor_ref} =
-      :proc_lib.spawn_opt(fn ->
-        result =
-          try do
-            case check.check.() do
-              {:ok, msg} -> {:ok, Result.build(check, :ok, msg)}
-              {:warning, msg} -> {:ok, Result.build(check, :warning, msg)}
-              {:error, msg} -> {:ok, Result.build(check, :error, msg)}
+      :proc_lib.spawn_opt(
+        fn ->
+          result =
+            try do
+              case check.check.() do
+                {:ok, msg} -> {:ok, Result.build(check, :ok, msg)}
+                {:warning, msg} -> {:ok, Result.build(check, :warning, msg)}
+                {:error, msg} -> {:ok, Result.build(check, :error, msg)}
+              end
+            rescue
+              error ->
+                {:ok, Result.from_exception(check, error)}
             end
-          rescue
-            error ->
-              {:ok, Result.from_exception(check, error)}
-          end
 
-        send(parent, {:check_result, result})
-      end, [:link, :monitor])
+          send(parent, {:check_result, result})
+        end,
+        [:link, :monitor]
+      )
 
     result =
       receive do
@@ -205,7 +210,9 @@ defmodule Botica.Runner.Executor do
   end
 
   defp resolve_result(_check, {:ok, result}, _timeout) when is_map(result), do: result
-  defp resolve_result(check, {:error, %{error: :timeout}}, timeout), do: Result.from_timeout(check, timeout)
+
+  defp resolve_result(check, {:error, %{error: :timeout}}, timeout),
+    do: Result.from_timeout(check, timeout)
 
   defp resolve_result(check, {:error, %{error: exc}}, _timeout) do
     Result.from_exception(check, to_exception(exc))
