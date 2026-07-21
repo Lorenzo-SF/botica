@@ -186,13 +186,17 @@ defmodule Botica.RuntimeBugsTest do
                 # still tries to send its result before being killed.
                 Process.sleep(50)
                 {:ok, "stale-check-1-result"}
-              end, timeout: 30),
+              end,
+              timeout: 30
+            ),
             make_check(
               :correct,
               fn ->
                 Process.sleep(10)
                 {:ok, "stale-check-2-result"}
-              end, timeout: 1_000)
+              end,
+              timeout: 1_000
+            )
           ]
         }
 
