@@ -25,6 +25,10 @@ defmodule Botica.Runner.Executor do
     execute(config, [])
   end
 
+  @doc """
+  Executes all checks in parallel with custom options. See module
+  `@moduledoc` for the option list.
+  """
   @spec execute(Types.config(), Types.executor_options()) ::
           {:ok, [Types.result()]} | {:error, String.t()}
   def execute(config, opts) when is_list(opts) do
@@ -55,9 +59,7 @@ defmodule Botica.Runner.Executor do
 
         results =
           Enum.map(sorted, fn check ->
-            {:ok, result} =
-              execute_single_check(check, Map.get(check, :timeout, @default_timeout))
-
+            {:ok, result} = execute_single_check(check, Map.get(check, :timeout, @default_timeout))
             result
           end)
 
@@ -70,6 +72,7 @@ defmodule Botica.Runner.Executor do
 
   # Private functions
 
+  @doc false
   defdelegate validate_config(config), to: Botica.Validation
 
   defp run_checks(checks, opts, run_opts) do
@@ -143,14 +146,23 @@ defmodule Botica.Runner.Executor do
     end
   end
 
-  # Runs a single check in an unlinked process so crashes do not
-  # propagate to the caller. Uses :proc_lib.spawn_opt/2 with link: false.
+  # Runs a single check in an unlinked, monitored process. Two safety
+  # mechanisms at play:
+  #
+  # 1. `:link` is NOT in the spawn_opt list. Without it, an `exit/1` inside
+  #    the check propagates only to the child, not to the caller. The caller
+  #    only ever sees the `:DOWN` message.
+  # 2. The result message is tagged with a unique `tag_ref` (`make_ref/0`)
+  #    so that stale `:check_result` messages from a previous (timed-out)
+  #    check cannot be matched by the next `receive`. This fixes a real
+  #    bug where a slow check's late message would be consumed by the
+  #    next sequential check, returning the wrong result.
   defp execute_single_check(check, timeout) do
     effective_timeout = timeout || @default_timeout
     parent = self()
+    tag_ref = make_ref()
 
-    # :proc_lib.spawn_opt with :monitor returns {pid, monitor_ref}
-    {pid, monitor_ref} =
+    {check_pid, monitor_ref} =
       :proc_lib.spawn_opt(
         fn ->
           result =
@@ -165,29 +177,40 @@ defmodule Botica.Runner.Executor do
                 {:ok, Result.from_exception(check, error)}
             end
 
-          send(parent, {:check_result, result})
+          send(parent, {tag_ref, :check_result, result})
         end,
-        [:link, :monitor]
+        [:monitor]
       )
 
     result =
       receive do
-        {:check_result, _} = msg ->
+        {^tag_ref, :check_result, _} = msg ->
           msg
 
-        {:DOWN, ^monitor_ref, :process, ^pid, :normal} ->
+        {:DOWN, ^monitor_ref, :process, ^check_pid, :normal} ->
           {:exit, :timeout}
 
-        {:DOWN, ^monitor_ref, :process, ^pid, reason} ->
+        {:DOWN, ^monitor_ref, :process, ^check_pid, reason} ->
           {:exit, reason}
       after
         effective_timeout ->
-          Process.exit(pid, :kill)
+          Process.exit(check_pid, :kill)
           {:exit, :timeout}
       end
 
+    # Always demonitor and flush any pending :DOWN message so it does not
+    # leak into the caller's mailbox. Also drain any tagged check_result
+    # message that arrived after the timeout/kill (race window).
+    Process.demonitor(monitor_ref, [:flush])
+
+    receive do
+      {^tag_ref, :check_result, _} -> :ok
+    after
+      0 -> :ok
+    end
+
     case result do
-      {:check_result, {:ok, _} = ok} ->
+      {^tag_ref, :check_result, {:ok, _} = ok} ->
         ok
 
       {:exit, :timeout} ->
