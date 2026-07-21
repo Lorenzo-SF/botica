@@ -108,6 +108,7 @@ defmodule Botica.RuntimeBugsTest do
 
     test "Executor.execute also rejects empty checks" do
       config = %{app_name: "t", checks: []}
+
       assert {:error, "config.checks must contain at least one check"} =
                Executor.execute(config)
     end
@@ -137,6 +138,7 @@ defmodule Botica.RuntimeBugsTest do
       assert_receive {:msgs, msgs}, 3_000
 
       down_msgs = Enum.filter(msgs, fn m -> match?({:DOWN, _, _, _, _}, m) end)
+
       assert down_msgs == [],
              "Expected no :DOWN leaks in caller mailbox, got: #{inspect(down_msgs)}"
     end
@@ -177,20 +179,20 @@ defmodule Botica.RuntimeBugsTest do
         config = %{
           app_name: "stale",
           checks: [
-            make_check(:stale, fn ->
-              # Slower than the 30ms timeout below but the child
-              # still tries to send its result before being killed.
-              Process.sleep(50)
-              {:ok, "stale-check-1-result"}
-            end,
-              timeout: 30
-            ),
-            make_check(:correct, fn ->
-              Process.sleep(10)
-              {:ok, "stale-check-2-result"}
-            end,
-              timeout: 1_000
-            )
+            make_check(
+              :stale,
+              fn ->
+                # Slower than the 30ms timeout below but the child
+                # still tries to send its result before being killed.
+                Process.sleep(50)
+                {:ok, "stale-check-1-result"}
+              end, timeout: 30),
+            make_check(
+              :correct,
+              fn ->
+                Process.sleep(10)
+                {:ok, "stale-check-2-result"}
+              end, timeout: 1_000)
           ]
         }
 

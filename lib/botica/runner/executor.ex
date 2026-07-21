@@ -59,7 +59,9 @@ defmodule Botica.Runner.Executor do
 
         results =
           Enum.map(sorted, fn check ->
-            {:ok, result} = execute_single_check(check, Map.get(check, :timeout, @default_timeout))
+            {:ok, result} =
+              execute_single_check(check, Map.get(check, :timeout, @default_timeout))
+
             result
           end)
 
