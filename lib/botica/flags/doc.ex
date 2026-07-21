@@ -8,9 +8,15 @@ defmodule Botica.Flags.Doc do
   | Name | Enabled | Default | Rollout | Description |
   """
 
+  alias Botica.Flags
+
+  @doc """
+  Writes the current flag registry to `priv/docs/FLAGS.md` as a
+  markdown table. Run via `mix botica:config`.
+  """
   @spec generate() :: :ok
   def generate do
-    flags = Botica.Flags.all()
+    flags = Flags.all()
 
     priv_dir = Application.app_dir(:botica, "priv")
     write_path = Path.join(priv_dir, "docs/FLAGS.md")

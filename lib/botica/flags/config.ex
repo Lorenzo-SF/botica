@@ -19,6 +19,11 @@ defmodule Botica.Flags.Config do
 
   alias Botica.Flags.Flag
 
+  @doc """
+  Reads flag defaults from the `:botica` application env under `:flags`.
+  Each entry must be either `{atom(), keyword()}` (a flag definition) or
+  a bare atom. Raises `ArgumentError` on malformed entries.
+  """
   @spec get() :: [Flag.t()]
   def get do
     Application.get_env(:botica, :flags, [])
