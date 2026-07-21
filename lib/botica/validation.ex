@@ -23,6 +23,9 @@ defmodule Botica.Validation do
       not is_list(Map.get(config, :checks)) ->
         {:error, "config.checks must be a list"}
 
+      config.checks == [] ->
+        {:error, "config.checks must contain at least one check"}
+
       true ->
         :ok
     end

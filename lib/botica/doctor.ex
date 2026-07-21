@@ -237,7 +237,7 @@ defmodule Botica.Doctor do
   ## Examples
 
       iex> Botica.Doctor.validate(%{app_name: \"test\", checks: []})
-      :ok
+      {:error, "config.checks must contain at least one check"}
       iex> Botica.Doctor.validate(%{app_name: \"test\"})
       {:error, "config.checks must be a list"}
       iex> Botica.Doctor.validate(%{checks: []})
@@ -377,5 +377,6 @@ defmodule Botica.Doctor do
 
   # Private functions
 
+  @doc false
   defdelegate validate_config(config), to: Botica.Validation
 end

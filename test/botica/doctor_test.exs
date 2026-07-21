@@ -105,6 +105,13 @@ defmodule Botica.DoctorTest do
 
       assert {:error, "config.app_name must be a string"} = Doctor.run(config)
     end
+
+    test "rejects empty checks list with no_checks error" do
+      config = %{app_name: "T", checks: []}
+
+      assert {:error, "config.checks must contain at least one check"} =
+               Doctor.run(config)
+    end
   end
 
   describe "run/2 with timeout" do
@@ -337,8 +344,15 @@ defmodule Botica.DoctorTest do
 
   describe "validate/1" do
     test "returns :ok for valid config" do
-      config = %{app_name: "test", checks: []}
+      config = %{app_name: "test", checks: [some_check()]}
       assert Doctor.validate(config) == :ok
+    end
+
+    test "returns error for empty checks" do
+      config = %{app_name: "test", checks: []}
+
+      assert Doctor.validate(config) ==
+               {:error, "config.checks must contain at least one check"}
     end
 
     test "returns error for missing checks" do
@@ -347,12 +361,13 @@ defmodule Botica.DoctorTest do
     end
 
     test "returns error for missing app_name" do
-      config = %{checks: []}
+      config = %{checks: [some_check()]}
       assert Doctor.validate(config) == {:error, "config.app_name must be a string"}
     end
 
     test "returns error for invalid app_name type" do
-      config = %{app_name: 123, checks: []}
+      config = %{app_name: 123, checks: [some_check()]}
+
       assert Doctor.validate(config) == {:error, "config.app_name must be a string"}
     end
   end
@@ -404,6 +419,17 @@ defmodule Botica.DoctorTest do
       sorted = Doctor.sort_checks(checks)
       assert Enum.map(sorted, & &1.id) == [:a, :b]
     end
+  end
+
+  defp some_check do
+    %{
+      id: :a,
+      name: "A",
+      description: "",
+      priority: 1,
+      check: fn -> {:ok, "ok"} end,
+      fix: fn -> :skipped end
+    }
   end
 
   defp passing_config do
