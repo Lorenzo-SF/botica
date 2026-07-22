@@ -1,8 +1,9 @@
 # Botica v2.1.0 — Plan de Ejecución
 
-> **Última actualización**: 2026-07-21
+> **Última actualización**: 2026-07-22
 > **Auditoría original**: `AUDIT.md` (2026-07-19)
 > **Auditoría complementaria**: revisión tras batch de calidad (2026-07-21)
+> **Auditoría complementaria v2**: revisión + agrupación por impacto (2026-07-22)
 > **Estado**: 5/5 comandos pasan. 5 bugs runtime confirmados y arreglados. Pendientes: cobertura + refactors.
 
 ---
@@ -34,6 +35,16 @@ CHANGELOG `[Unreleased]` actualizado. Git history normalizado.
 | **Total tareas** | **14 + 5** | **11** | **8** |
 
 **Esfuerzo restante estimado**: ~14h (refactors + tests).
+
+### Vista por impacto (ver §11 para detalle)
+
+| Impacto | # tareas | Descripción |
+|---------|----------|-------------|
+| 🟢 LOCAL | 13 | Solo afecta a botica internamente (fixes typespec, tests, polish) |
+| 🟡 MEDIO | 2 | Refactors estructurales (Doctor/Executor split) — afectan a delfos |
+| 🔴 CRÍTICO | 0 | botica es leaf library, refactors mantienen API vía fachada |
+
+**Conclusión**: botica tiene **0 tareas críticas** (todos los P0 ya están arreglados en este batch). Los 2 refactors (BOT-15, BOT-16) son MEDIO porque el único consumer (delfos) usa `Botica.Doctor.run/1` y `Botica.Doctor.fix/1`, y los splits mantienen la API vía fachadas.
 
 ---
 
@@ -263,3 +274,106 @@ Bajo `[Unreleased]`:
 - `Task.Supervisor` para telemetry (BOT-PENDING-2)
 
 NO bumpear versión.
+
+---
+
+## 10.b AUDIT v2 — Hallazgos adicionales no abordados (2026-07-22)
+
+> Tareas del `AUDIT.md` original que **no tienen contraparte** en las secciones §3-§5 (BOT-01..BOT-19).
+
+### BOT-20: `Fixer.fix/2` — unreachable error return in spec
+- **Hallazgo** (`AUDIT.md` §P1 #5): `fixer.ex:52` `@spec fix(...) :: {:ok, ...} | {:error, String.t()}` pero el código no tiene ningún path que produzca `{:error, _}`. Los errores se capturan y se añaden a `report.failed`.
+- **Severidad**: 🟠 P1
+- **Ficheros**: `lib/botica/repair/fixer.ex`
+- **Esfuerzo**: 5 min
+- **Pasos**:
+  1. Cambiar `@spec` a `{:ok, Types.fix_report()}` (sin `| {:error, ...}`)
+  2. Verificar con `mix dialyzer`
+- **Verificación**: `mix dialyzer` (0 warnings)
+- **Impacto**: 🟢 LOCAL
+
+### BOT-21: Tests para `flags/doc.ex` (0% coverage)
+- **Hallazgo** (`AUDIT.md` §P2 #11): `flags/doc.ex` tiene **0.0% cobertura** — todo el módulo está uncovered.
+- **Severidad**: 🟡 P2
+- **Ficheros**: `test/botica/flags/doc_test.exs` (nuevo o ampliar)
+- **Esfuerzo**: 1h
+- **Pasos**:
+  1. Tests para `Doc.generate/0` con flags vacías → markdown con tabla vacía
+  2. Tests con múltiples flags → markdown con todas las filas correctas
+  3. Tests para formato de tabla (columnas, separadores, alignment)
+  4. Verificar que `Doc.generate/0` es idempotente
+- **Verificación**: `mix test --cover` (flags/doc.ex debe mostrar ≥70%)
+- **Impacto**: 🟢 LOCAL
+
+### BOT-22: Documentar `botica.ex:87 vs 94` delegación con aridad distinta
+- **Hallazgo** (`AUDIT.md` §P3 #14): `run/1` y `run/2` delegan a `Doctor.run` con arities diferentes. Funciona pero merece nota.
+- **Severidad**: 🟢 P3
+- **Ficheros**: `lib/botica.ex`
+- **Esfuerzo**: 5 min
+- **Pasos**:
+  1. Añadir `@doc` claro a `run/1` y `run/2` indicando que ambos son conveniencias sobre `Doctor.run/2`
+  2. Si se quiere, consolidar en una sola función con defaults
+- **Verificación**: `mix docs` (sin warnings)
+- **Impacto**: 🟢 LOCAL
+
+---
+
+## 11. Agrupación por impacto en el ecosistema (2026-07-22)
+
+> **Pregunta**: si hago esta tarea, ¿tengo que tocar otros proyectos o se hace y ya?
+
+### 🟢 LOCAL — "se hace y ya" (13 tareas)
+
+| ID | Tarea |
+|----|-------|
+| BOT-08 | Tests para `Memory` battery |
+| BOT-13 | Rename `timeout` variable en `run_checks/3` |
+| BOT-14 | Documentar delegaciones en `Botica` |
+| BOT-17 | Tests para `Flags.Store` (race conditions) |
+| BOT-18 | Tests para `Repair.Fixer` |
+| BOT-19 | Tests para `Redis` battery |
+| BOT-20 | `Fixer.fix/2` spec unreachable error return |
+| BOT-21 | Tests para `flags/doc.ex` |
+| BOT-22 | Documentar delegación `run/1` vs `run/2` |
+| BOT-PENDING-1 | ETS table `:public` — documentar decisión de diseño |
+| BOT-PENDING-2 | Telemetry fire-and-forget supervised |
+| BOT-PENDING-3 | Path-only sibling deps |
+| BOT-PENDING-4 | ETS write serialization not enforced |
+
+**Workflow**: branch en `botica` → tests → commit → push.
+
+---
+
+### 🟡 MEDIO — "verificar 1-2 consumidores" (2 tareas)
+
+| ID | Tarea | Consumidores | Smoke test |
+|----|-------|--------------|------------|
+| BOT-15 | Split `doctor.ex` (382 LoC) | delfos (vía `Botica.Doctor.run/1`, `fix/1`) | `cd ../delfos && mix test` |
+| BOT-16 | Split `runner/executor.ex` (249 LoC) | delfos (vía Doctor) | idem BOT-15 |
+
+**Workflow**: branch en `botica` → tests propios → smoke test en delfos → merge.
+
+---
+
+### 🔴 CRÍTICO (0 tareas)
+
+**No hay tareas críticas en botica.** Todos los P0 originales (5 bugs runtime) ya están resueltos. Botica es leaf library con un único consumer (delfos) y los refactors mantienen API vía fachadas.
+
+---
+
+### 📊 Matriz resumen
+
+| Impacto | # tareas | Esfuerzo | Branch dedicada | Smoke tests externos |
+|---------|----------|----------|-----------------|----------------------|
+| 🟢 LOCAL | 13 | ~7h | No | 0 proyectos |
+| 🟡 MEDIO | 2 | ~9h | No (en botica) | 1 proyecto (delfos) |
+| 🔴 CRÍTICO | 0 | — | — | — |
+| **Total** | **15** | **~16h** | — | — |
+
+### 🎯 Orden de ejecución sugerido
+
+1. **Quick wins LOCAL** (15 min): BOT-20 (Fixer spec), BOT-22 (delegation doc), BOT-13 (rename si no aplicado)
+2. **Bug fixes LOCAL** (2-3h): BOT-PENDING-1 (ETS docs), BOT-PENDING-2 (Task.Supervisor)
+3. **Tests LOCAL** (5h): BOT-08 (Memory), BOT-17 (Flags.Store), BOT-18 (Fixer), BOT-19 (Redis), BOT-21 (doc.ex)
+4. **Polish LOCAL** (1h): BOT-14 (delegations), BOT-PENDING-3, BOT-PENDING-4
+5. **MEDIO con smoke tests** (9h, varios sprints): BOT-15, BOT-16
