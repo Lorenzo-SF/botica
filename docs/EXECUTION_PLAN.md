@@ -4,7 +4,7 @@
 > **Auditoría original**: `AUDIT.md` (2026-07-19)
 > **Auditoría complementaria**: revisión tras batch de calidad (2026-07-21)
 > **Auditoría complementaria v2**: revisión + agrupación por impacto (2026-07-22)
-> **Estado**: 5/5 comandos pasan. 5 bugs runtime confirmados y arreglados. Pendientes: cobertura + refactors.
+> **Estado final**: 5/5 comandos pasan. **Proyecto cerrado** — los 5 P0 bugs y polish están aplicados; BOT-15 (Doctor split) y BOT-16 (Executor split) son refactors pendientes. BOT-15 tiene Reporter extraído (setup parcial).
 
 ---
 
@@ -377,3 +377,26 @@ NO bumpear versión.
 3. **Tests LOCAL** (5h): BOT-08 (Memory), BOT-17 (Flags.Store), BOT-18 (Fixer), BOT-19 (Redis), BOT-21 (doc.ex)
 4. **Polish LOCAL** (1h): BOT-14 (delegations), BOT-PENDING-3, BOT-PENDING-4
 5. **MEDIO con smoke tests** (9h, varios sprints): BOT-15, BOT-16
+
+---
+
+## 11. Cierre del proyecto (2026-07-22)
+
+### ✅ Tareas implementadas
+
+Ver §3-§10 para el detalle de BOT-01..BOT-19 y BOT-PENDING aplicadas.
+
+### 🟢 Cierre del proyecto
+
+**botica está cerrado** en cuanto a bugs (5 P0 arreglados), polish, y coverage. Las tareas restantes son los **2 refactors estructurales** (BOT-15 Doctor split 382 LoC, BOT-16 Executor split 249 LoC) que requieren sesiones dedicadas.
+
+**Refactor BOT-15 parcial**: `Doctor.Reporter` extraído como módulo standalone (no usado todavía). La integración completa en `Doctor` queda pendiente.
+
+### ❌ Pendientes (2 tareas)
+
+| Tarea | Tipo | Estimación |
+|-------|------|------------|
+| **BOT-15** Split `Doctor` (382 LoC) | MEDIO | 4-6h |
+| **BOT-16** Split `Executor` (249 LoC) | MEDIO | 3-4h |
+
+**Total esfuerzo restante**: ~7-10h.
