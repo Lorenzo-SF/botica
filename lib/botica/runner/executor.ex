@@ -3,10 +3,12 @@ defmodule Botica.Runner.Executor do
   Executes health checks in parallel with timeout support.
 
   This module provides the core execution engine for Botica checks,
-  running them in parallel while respecting timeout constraints.
+  running them in parallel while respecting timeout constraints. Low-level
+  check execution is delegated to `Botica.Runner.CheckRunner`.
   """
 
   alias Botica.Check.Result
+  alias Botica.Runner.CheckRunner
   alias Botica.Runner.Sequencer
   alias Botica.Types
 
@@ -60,7 +62,7 @@ defmodule Botica.Runner.Executor do
         results =
           Enum.map(sorted, fn check ->
             {:ok, result} =
-              execute_single_check(check, Map.get(check, :timeout, @default_timeout))
+              CheckRunner.run_check(check, Map.get(check, :timeout, @default_timeout))
 
             result
           end)
@@ -85,7 +87,7 @@ defmodule Botica.Runner.Executor do
     funs =
       Enum.map(checks, fn check ->
         check_timeout = Map.get(check, :timeout, effective_timeout)
-        fn -> execute_single_check(check, check_timeout) end
+        fn -> CheckRunner.run_check(check, check_timeout) end
       end)
 
     cond do
@@ -148,102 +150,9 @@ defmodule Botica.Runner.Executor do
     end
   end
 
-  # Runs a single check in an unlinked, monitored process. Two safety
-  # mechanisms at play:
-  #
-  # 1. `:link` is NOT in the spawn_opt list. Without it, an `exit/1` inside
-  #    the check propagates only to the child, not to the caller. The caller
-  #    only ever sees the `:DOWN` message.
-  # 2. The result message is tagged with a unique `tag_ref` (`make_ref/0`)
-  #    so that stale `:check_result` messages from a previous (timed-out)
-  #    check cannot be matched by the next `receive`. This fixes a real
-  #    bug where a slow check's late message would be consumed by the
-  #    next sequential check, returning the wrong result.
-  defp execute_single_check(check, timeout) do
-    effective_timeout = timeout || @default_timeout
-    parent = self()
-    tag_ref = make_ref()
-
-    {check_pid, monitor_ref} =
-      :proc_lib.spawn_opt(
-        fn ->
-          result =
-            try do
-              case check.check.() do
-                {:ok, msg} -> {:ok, Result.build(check, :ok, msg)}
-                {:warning, msg} -> {:ok, Result.build(check, :warning, msg)}
-                {:error, msg} -> {:ok, Result.build(check, :error, msg)}
-              end
-            rescue
-              error ->
-                {:ok, Result.from_exception(check, error)}
-            end
-
-          send(parent, {tag_ref, :check_result, result})
-        end,
-        [:monitor]
-      )
-
-    result =
-      receive do
-        {^tag_ref, :check_result, _} = msg ->
-          msg
-
-        {:DOWN, ^monitor_ref, :process, ^check_pid, :normal} ->
-          {:exit, :timeout}
-
-        {:DOWN, ^monitor_ref, :process, ^check_pid, reason} ->
-          {:exit, reason}
-      after
-        effective_timeout ->
-          Process.exit(check_pid, :kill)
-          {:exit, :timeout}
-      end
-
-    # Always demonitor and flush any pending :DOWN message so it does not
-    # leak into the caller's mailbox. Also drain any tagged check_result
-    # message that arrived after the timeout/kill (race window).
-    Process.demonitor(monitor_ref, [:flush])
-
-    receive do
-      {^tag_ref, :check_result, _} -> :ok
-    after
-      0 -> :ok
-    end
-
-    case result do
-      {^tag_ref, :check_result, {:ok, _} = ok} ->
-        ok
-
-      {:exit, :timeout} ->
-        {:ok, Result.from_timeout(check, effective_timeout)}
-
-      {:exit, _reason} ->
-        {:error, %{error: :task_crashed}}
-    end
-  end
-
-  # Converts any term to an Exception struct for Result.from_exception.
-  defp to_exception(term) do
-    if is_struct(term, Exception), do: term, else: RuntimeError.exception(inspect(term))
-  end
-
   defp process_results(checks, raw_results, effective_timeout) do
     checks
     |> Enum.zip(raw_results)
-    |> Enum.map(fn {check, raw} -> resolve_result(check, raw, effective_timeout) end)
-  end
-
-  defp resolve_result(_check, {:ok, result}, _timeout) when is_map(result), do: result
-
-  defp resolve_result(check, {:error, %{error: :timeout}}, timeout),
-    do: Result.from_timeout(check, timeout)
-
-  defp resolve_result(check, {:error, %{error: exc}}, _timeout) do
-    Result.from_exception(check, to_exception(exc))
-  end
-
-  defp resolve_result(check, other, _timeout) do
-    Result.build(check, :error, "unexpected: #{inspect(other)}")
+    |> Enum.map(fn {check, raw} -> CheckRunner.resolve_result(check, raw, effective_timeout) end)
   end
 end
