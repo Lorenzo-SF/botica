@@ -7,7 +7,6 @@ defmodule Botica.Runner.Executor do
   check execution is delegated to `Botica.Runner.CheckRunner`.
   """
 
-  alias Botica.Check.Result
   alias Botica.Runner.CheckRunner
   alias Botica.Runner.Sequencer
   alias Botica.Types
