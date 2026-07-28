@@ -1,5 +1,5 @@
 defmodule Botica.Batteries.Disk do
-  alias Arrea.Command
+  alias Trebejo.Util
 
   @moduledoc """
   Predefined health check for disk space usage.
@@ -7,10 +7,9 @@ defmodule Botica.Batteries.Disk do
   This module provides a check that monitors disk consumption
   and warns when available space falls below safe thresholds.
 
-  Uses `Arrea.Command.execute/2` with `LC_ALL=C` so the parser
-  always sees the English output regardless of the host locale
-  (a Spanish- or French-locale host would otherwise emit localized
-  column headers and break the parser).
+  Uses `Trebejo.Util.run_cmd_legacy/3` with arg lists — never
+  interpolated into shell strings — to prevent shell injection.
+  The `LC_ALL=C` env var ensures locale-stable output.
 
   ## Usage
 
@@ -61,25 +60,18 @@ defmodule Botica.Batteries.Disk do
     # headers (Filesystem, Use%, etc.).
     env = %{"LC_ALL" => "C"}
 
-    case Command.execute("df -k #{path}", timeout: 5_000, validate: false, env: env) do
-      {:ok, %{exit_code: 0, stdout: output}} ->
+    case Util.run_cmd_legacy("df", ["-k", path], timeout: 5_000, env: env) do
+      {output, 0} ->
         parse_df_output(output, warning_threshold, error_threshold)
 
-      {:ok, %{exit_code: code, stdout: output}} ->
+      {output, code} ->
         {:error, "df exited #{code} for #{path}: #{String.trim(output)}"}
-
-      {:error, :timeout} ->
-        {:error, "Disk check timed out for #{path}"}
-
-      {:error, reason} ->
-        {:error, "df failed for #{path}: #{inspect(reason)}"}
     end
   end
 
   defp parse_df_output(output, warning_threshold, error_threshold) do
     lines = String.split(output, "\n", trim: true)
 
-    # Find the line with the actual usage (skip header)
     data_line =
       Enum.find(lines, fn line ->
         not String.contains?(line, "Filesystem") and String.contains?(line, "%")
@@ -109,9 +101,6 @@ defmodule Botica.Batteries.Disk do
   end
 
   defp parse_use_percentage(line) do
-    # `df -k` (Linux/GNU): "Filesystem 1024-blocks Used Available Use% Mounted on"
-    # `df -k` (macOS/BSD): "Filesystem 512-blocks Used Avail Capacity iused ifree %iused Mounted on"
-    # In both cases the use% column is one before last. Split and pick it.
     parts = String.split(String.trim(line), ~r/\s+/, trim: true)
 
     case parts do

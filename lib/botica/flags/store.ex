@@ -4,12 +4,15 @@ defmodule Botica.Flags.Store do
 
   ## Architecture
 
-    - The ETS table `:botica_flags` is `:public` and `read_concurrency: true`
-      so reads are O(1) and lock-free, even under heavy concurrent load.
-    - Writes go through the GenServer (`put/1`, `delete/1`) so that mutations
-      are serialised and the table stays consistent.
-    - The GenServer is also where flag lifecycle events (defined, enabled,
-      disabled, rollout-changed) can be hooked in the future via telemetry.
+    - The ETS table `:botica_flags` is **`:public`** and
+      `read_concurrency: true` so reads are O(1) and lock-free, even
+      under heavy concurrent load. The `:public` choice is deliberate:
+      it lets callers read directly without bouncing through the
+      GenServer, which is the whole point of having an ETS backend.
+      Mutations still go through the GenServer (`put/1`, `delete/1`)
+      so the table stays consistent.
+    - The GenServer is also where flag lifecycle events (defined,
+      enabled, disabled, rollout-changed) are emitted via telemetry.
 
   ## Usage
 
@@ -26,12 +29,19 @@ defmodule Botica.Flags.Store do
 
   use GenServer
 
+  alias Botica.Flags.Config
+
   @table :botica_flags
 
   # ---------------------------------------------------------------------------
   # Public API
   # ---------------------------------------------------------------------------
 
+  @doc """
+  Starts the `Botica.Flags.Store` GenServer. Called automatically by
+  `Botica.Application`. Use `start_link/1` from custom supervision
+  trees when you need to override the default application config.
+  """
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -69,19 +79,21 @@ defmodule Botica.Flags.Store do
 
   @doc """
   GenServer-mediated write. Serialised to avoid race conditions between
-  concurrent definitions / enable / disable / set calls.
+  concurrent definitions / enable / disable / set calls. 5s timeout
+  is generous for an in-memory ETS write and surfaces a stalled server
+  fast.
   """
   @spec put(Botica.Flags.Flag.t()) :: :ok
   def put(%Botica.Flags.Flag{} = flag) do
-    GenServer.call(__MODULE__, {:put, flag})
+    GenServer.call(__MODULE__, {:put, flag}, 5_000)
   end
 
   @doc """
-  Remove a flag from the registry.
+  Remove a flag from the registry. 5s timeout — see `put/1` for rationale.
   """
   @spec delete(atom()) :: :ok
   def delete(name) when is_atom(name) do
-    GenServer.call(__MODULE__, {:delete, name})
+    GenServer.call(__MODULE__, {:delete, name}, 5_000)
   end
 
   @doc """
@@ -92,38 +104,74 @@ defmodule Botica.Flags.Store do
     :ets.info(@table, :size) || 0
   end
 
+  @doc """
+  Diagnostic snapshot: total writes since the GenServer started
+  plus the current ETS size. Useful for `mix botica:config` and
+  for debugging flag registration.
+  """
+  @spec stats() :: %{writes: non_neg_integer(), count: non_neg_integer()}
+  def stats do
+    GenServer.call(__MODULE__, :stats)
+  end
+
   # ---------------------------------------------------------------------------
   # GenServer
   # ---------------------------------------------------------------------------
 
   @impl true
   def init(_opts) do
-    # :set + :public + :named_table + read_concurrency is the canonical
-    # "fast concurrent reads, serialised writes" combo.
+    # Create the ETS table with fast concurrent reads.
     :ets.new(@table, [:set, :named_table, :public, read_concurrency: true])
+
+    # Load defaults from application config on first startup, avoiding
+    # overriding any existing flags that may have been persisted.
+    if :ets.info(@table, :size) == 0 do
+      Config.get()
+      |> Enum.each(fn flag -> :ets.insert(@table, {flag.name, flag}) end)
+    end
+
     {:ok, %{writes: 0}}
   end
 
   @impl true
   def handle_call({:put, %Botica.Flags.Flag{} = flag}, _from, state) do
-    # Refresh updated_at on every write so introspection sees when the flag
-    # last changed state. Use :erlang.system_time(:microsecond) so back-to-back
-    # writes within the same second still get distinct timestamps (DateTime.utc_now/0
-    # truncated to :second collides on fast systems).
-    fresh = %{
-      flag
-      | updated_at:
-          :erlang.system_time(:microsecond)
-          |> DateTime.from_unix!(:microsecond)
-    }
+    # Preserve created_at if flag already exists (TOCTOU fix).
+    # Also always refresh updated_at atomically in the GenServer.
+    created_at =
+      case :ets.lookup(@table, flag.name) do
+        [{_name, existing}] -> existing.created_at
+        [] -> flag.created_at
+      end
+
+    now =
+      :erlang.system_time(:microsecond)
+      |> DateTime.from_unix!(:microsecond)
+
+    fresh = %{flag | created_at: created_at, updated_at: now}
 
     :ets.insert(@table, {fresh.name, fresh})
+
+    # Fire-and-forget telemetry: a slow listener must never block the
+    # GenServer mailbox. Tasks are intentionally not linked (`:noproc`
+    # from a long-dead VM would crash the GenServer otherwise).
+    _ =
+      Task.start(fn ->
+        :telemetry.execute([:botica, :flags, :put], %{value: fresh}, %{})
+      end)
+
     {:reply, :ok, %{state | writes: state.writes + 1}}
   end
 
   @impl true
   def handle_call({:delete, name}, _from, state) when is_atom(name) do
     :ets.delete(@table, name)
+
+    # Fire-and-forget telemetry — see `:put` handler for rationale.
+    _ =
+      Task.start(fn ->
+        :telemetry.execute([:botica, :flags, :delete], %{name: name}, %{})
+      end)
+
     {:reply, :ok, %{state | writes: state.writes + 1}}
   end
 
@@ -131,4 +179,8 @@ defmodule Botica.Flags.Store do
   def handle_call(:stats, _from, state) do
     {:reply, %{writes: state.writes, count: count()}, state}
   end
+
+  # Catch-all for unexpected messages — ignore them silently.
+  @impl true
+  def handle_info(_msg, state), do: {:noreply, state}
 end

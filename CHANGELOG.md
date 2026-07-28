@@ -5,6 +5,55 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`Botica.Runner.Executor.execute_single_check/2`** — three real
+  runtime bugs in the spawn/recv loop:
+    1. The check worker was spawned with `[:link, :monitor]`, so a
+       check that called `exit/1` (e.g. `exit(:boom)`) propagated the
+       exit signal to the caller and killed it. The link is removed;
+       the check still runs in a monitored, unlinked process.
+    2. Successful and rescued checks never called `Process.demonitor`
+       with `[:flush]`, so `:DOWN` messages leaked into the caller's
+       mailbox — one per check in the sequential path. They are now
+       always demonitored and flushed.
+    3. The `{:check_result, _}` message was untagged, so a late result
+       from a timed-out check could be consumed by the next
+       sequential check's `receive`, returning the wrong result. The
+       message is now tagged with a fresh `make_ref/0` and stale
+       leftovers are drained after the kill.
+- **`Botica.Validation.validate_config/1`** — now rejects
+  `checks: []`. Previously the validation passed and
+  `Executor.execute` computed `max_concurrency: 0`, which made
+  `Task.async_stream` raise `ArgumentError`.
+
+### Added
+- **`Botica.Flags.Store.stats/0`** — public API that returns
+  `%{writes: n, count: n}`. The `handle_call(:stats, ...)` was
+  previously orphaned.
+- **`@doc`** for 17 previously undocumented public exports across
+  `Botica`, `Botica.Flags`, `Botica.Flags.Store`, `Botica.Flags.Doc`,
+  `Botica.Flags.Config`, `Botica.Runner.Executor`, and
+  `Botica.Doctor`.
+- **Regression tests** for the five runtime bugs in
+  `test/botica/runtime_bugs_test.exs` (11 tests).
+- **`Botica.Flags.Config`** — reads default flag definitions from
+  application config (`config :botica, :flags`).
+- **`Botica.Flags.Doc`** — generator that writes `docs/FLAGS.md` with
+  a markdown table of all registered flags.
+- **`botica:config`** — mix alias to run the doc generator.
+- **`Botica.Flags.Store`** now auto-loads defaults on start and emits
+  `[:botica, :flags, :put]` / `[:botica, :flags, :delete]` telemetry
+  events.
+
+### Changed
+- **`mix.exs`**: `source_ref` aligned to `2.1.0` (was `3.0.0`,
+  pointing at a non-existent tag). Documented the rationale for
+  path-only sibling deps.
+- **`Botica.Flags.Store.put/1` / `delete/1`** now use an explicit
+  `5_000` ms `GenServer.call` timeout.
+
 ## [2.0.0] - 2026-07-07
 
 This entry consolidates everything between `1.0.0` and the current

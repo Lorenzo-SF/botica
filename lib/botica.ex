@@ -127,14 +127,33 @@ defmodule Botica do
   # Feature flags — see `Botica.Flags` for full documentation.
   # ---------------------------------------------------------------------------
 
+  @doc "Defines a feature flag. See `Botica.Flags.define/2`."
   defdelegate define(name, opts \\ []), to: Botica.Flags
+
+  @doc "Enables a flag (or creates + enables it if absent). See `Botica.Flags.enable/1`."
   defdelegate enable(name), to: Botica.Flags
+
+  @doc "Disables a flag (or creates + disables it if absent). See `Botica.Flags.disable/1`."
   defdelegate disable(name), to: Botica.Flags
+
+  @doc "Updates attributes of an existing flag. See `Botica.Flags.set/2`."
   defdelegate set(name, opts), to: Botica.Flags
+
+  @doc "Removes a flag. See `Botica.Flags.delete/1`."
   defdelegate delete(name), to: Botica.Flags
+
+  @doc "Returns whether a flag is on (binary). See `Botica.Flags.enabled?/1`."
   defdelegate enabled?(name), to: Botica.Flags
+
+  @doc "Returns whether a flag is on for a given entity, with rollout bucketing. See `Botica.Flags.enabled?/2`."
   defdelegate enabled?(name, opts), to: Botica.Flags
+
+  @doc "Returns the flag struct or `:error`. See `Botica.Flags.get/1`."
   defdelegate get(name), to: Botica.Flags
+
+  @doc "Returns all registered flags. See `Botica.Flags.all/0`."
   defdelegate all(), to: Botica.Flags
+
+  @doc "Returns the number of registered flags. See `Botica.Flags.count/0`."
   defdelegate count(), to: Botica.Flags
 end

@@ -194,6 +194,11 @@ defmodule Botica.Flags do
     end
   end
 
+  @doc """
+  Two-arity variant of `enabled?/1`. The `for:` argument is the entity
+  used to deterministically bucket into the rollout percentage — pass a
+  user id, session id, or any term that should get a stable answer.
+  """
   @spec enabled?(atom(), keyword()) :: boolean()
   def enabled?(name, opts) when is_atom(name) and is_list(opts) do
     entity = Keyword.get(opts, :for)

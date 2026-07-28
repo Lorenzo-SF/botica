@@ -66,23 +66,7 @@ defmodule Botica.Check.Behaviour do
   """
   @callback validate_config(opts :: keyword()) :: :ok | {:error, String.t()}
 
-  @doc """
-  Optional callback to prepare state before running checks.
-
-  Use this to set up any resources needed by the check.
-  The default implementation does nothing.
-  """
-  @callback prepare(opts :: keyword()) :: :ok | {:error, String.t()}
-
-  @doc """
-  Optional callback to cleanup state after checks complete.
-
-  Use this to release any resources acquired in `prepare/1`.
-  The default implementation does nothing.
-  """
-  @callback cleanup(opts :: keyword()) :: :ok
-
-  @optional_callbacks validate_config: 1, prepare: 1, cleanup: 1
+  @optional_callbacks validate_config: 1
 
   @doc """
   Macro to use this behaviour in a module.
@@ -102,20 +86,6 @@ defmodule Botica.Check.Behaviour do
       """
       @impl Botica.Check.Behaviour
       def validate_config(_opts), do: :ok
-
-      @doc """
-      Default implementation of prepare/1 - does nothing.
-      Override if you need to set up resources.
-      """
-      @impl Botica.Check.Behaviour
-      def prepare(_opts), do: :ok
-
-      @doc """
-      Default implementation of cleanup/1 - does nothing.
-      Override if you need to release resources.
-      """
-      @impl Botica.Check.Behaviour
-      def cleanup(_opts), do: :ok
 
       defoverridable Botica.Check.Behaviour
     end

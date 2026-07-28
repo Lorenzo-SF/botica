@@ -1,6 +1,7 @@
 defmodule Botica.Batteries.PostgreSQL do
   alias Arrea.Command
   alias Trebejo.Network
+  alias Trebejo.Util
 
   @moduledoc """
   Predefined health check for PostgreSQL database connectivity.
@@ -10,16 +11,10 @@ defmodule Botica.Batteries.PostgreSQL do
   a raw TCP port check (via `Trebejo.Network.port_open?/3`) when the
   binary is not installed.
 
-  All command execution is routed through `Arrea.Command.execute/2`
-  so consumers get the full Arrea infra for free: real timeout
-  cancellation, validation, telemetry, shell handling, and the
-  sudo allowlist configured in `config/config.exs`.
-
-  ## Installation
-
-  Optional: install `pg_isready` (ships with the `postgresql-client`
-  package on most distros). Without it, the battery degrades to a
-  raw TCP probe on the configured port.
+  All command execution uses arg lists — never interpolated into
+  shell strings — to prevent shell injection. Routed through
+  `Trebejo.Util.run_cmd_legacy/3` for consistent timeout handling
+  and structured errors.
 
   ## Usage
 
@@ -83,10 +78,6 @@ defmodule Botica.Batteries.PostgreSQL do
 
   @doc """
   Attempts to start the PostgreSQL service via systemctl.
-
-  Requires sudo NOPASSWD configured for `systemctl start postgresql`
-  (or equivalent). The exact sudo commands allowed are configured
-  via `config :arrea, :engine, sudo_allowlist` in `config/config.exs`.
   """
   @spec start_service() :: Botica.Types.fix_result()
   def start_service do
@@ -101,27 +92,21 @@ defmodule Botica.Batteries.PostgreSQL do
   # ── Private helpers ───────────────────────────────────────────────────────
 
   defp check_via_pg_isready(host, port, user) do
-    cmd = "pg_isready -h #{host} -p #{port} -U #{user}"
-
-    case Command.execute(cmd, timeout: 5_000, validate: false) do
-      {:ok, %{exit_code: 0, stdout: _}} ->
+    case Util.run_cmd_legacy("pg_isready", ["-h", host, "-p", to_string(port), "-U", user],
+           timeout: 5_000
+         ) do
+      {_output, 0} ->
         {:ok, "PostgreSQL is ready at #{host}:#{port}"}
 
-      {:ok, %{exit_code: code, stdout: output}} ->
+      {output, code} ->
         {:error, "PostgreSQL not ready (exit #{code}): #{String.trim(output)}"}
-
-      {:error, :timeout} ->
-        {:error, "PostgreSQL check timed out at #{host}:#{port}"}
-
-      {:error, reason} ->
-        {:error, "PostgreSQL check failed: #{inspect(reason)}"}
     end
   end
 
   defp check_sudo_available do
     if Command.command_exists?("sudo") do
-      case Command.execute("sudo -n true", validate: false) do
-        {:ok, %{exit_code: 0}} ->
+      case Util.run_cmd_legacy("sudo", ["-n", "true"]) do
+        {_, 0} ->
           :ok
 
         _ ->
@@ -133,17 +118,12 @@ defmodule Botica.Batteries.PostgreSQL do
   end
 
   defp run_sudo_systemctl(action, service) do
-    cmd = "sudo systemctl #{action} #{service}"
-
-    case Command.execute(cmd, timeout: 30_000) do
-      {:ok, %{exit_code: 0}} ->
+    case Util.run_cmd_legacy("sudo", ["systemctl", action, service], timeout: 30_000) do
+      {_, 0} ->
         :ok
 
-      {:ok, %{exit_code: code, stdout: output}} ->
+      {output, code} ->
         {:error, "systemctl #{action} #{service} failed (exit #{code}): #{String.trim(output)}"}
-
-      {:error, reason} ->
-        {:error, "systemctl #{action} #{service} failed: #{inspect(reason)}"}
     end
   end
 end

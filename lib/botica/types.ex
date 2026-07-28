@@ -40,7 +40,7 @@ defmodule Botica.Types do
           name: String.t(),
           description: String.t(),
           priority: non_neg_integer(),
-          tags: [atom()] | [],
+          tags: [atom()],
           timeout: non_neg_integer() | nil,
           check: (-> check_result),
           fix: (-> fix_result) | nil,
@@ -49,8 +49,8 @@ defmodule Botica.Types do
 
   @type executor_option ::
           {:timeout, non_neg_integer()}
-          | :stop_on_first_error
-          | :continue_on_error
+          | {:stop_on_first_error, boolean()}
+          | {:continue_on_error, boolean()}
 
   @type executor_options :: [executor_option()]
 end

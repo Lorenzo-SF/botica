@@ -18,7 +18,7 @@ Botica gives you two complementary tools:
 ```elixir
 def deps do
   [
-    {:botica, "~> 1.0"}
+    {:botica, "~> 2.1"}
   ]
 end
 ```
@@ -50,6 +50,16 @@ config = %{
 summary = Botica.Doctor.summary(results)
 # => %{ok: 1, warning: 0, error: 0, total: 1, passed?: true}
 ```
+
+> **Crash isolation** — every check runs in an unlinked, monitored
+> process. A check that calls `exit/1` or throws an unhandled
+> exception cannot kill the caller; it is reported as an error
+> result instead. Likewise `:DOWN` messages from the monitor are
+> always flushed so the caller's mailbox stays clean.
+
+> **Validation** — `Botica.Doctor.run/2` rejects configurations with
+> an empty `checks: []` list and returns
+> `{:error, "config.checks must contain at least one check"}`.
 
 Botica also ships predefined batteries: PostgreSQL, Redis, Memory, Disk.
 
@@ -146,7 +156,9 @@ Botica (top-level facade — defdelegates)
 
 - **`Botica.Flags`** is the feature-flag subsystem, backed by a single
   ETS table (`:botica_flags`) owned by `Botica.Flags.Store` (GenServer).
-  Writes go through the GenServer; reads are lock-free O(1).
+  Writes go through the GenServer; reads are lock-free O(1). For
+  diagnostics, `Botica.Flags.Store.stats/0` returns
+  `%{writes: n, count: n}`.
 
 ## Documentation
 

@@ -49,7 +49,7 @@ defmodule Botica.Repair.Fixer do
       iex> report.skipped
       [:ok]
   """
-  @spec fix(Types.config(), [Types.result()]) :: {:ok, Types.fix_report()} | {:error, String.t()}
+  @spec fix(Types.config(), [Types.result()]) :: {:ok, Types.fix_report()}
   def fix(config, results) when is_list(results) do
     config_map = Map.new(config.checks, fn c -> {c.id, c} end)
 
