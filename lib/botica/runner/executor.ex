@@ -3,10 +3,11 @@ defmodule Botica.Runner.Executor do
   Executes health checks in parallel with timeout support.
 
   This module provides the core execution engine for Botica checks,
-  running them in parallel while respecting timeout constraints.
+  running them in parallel while respecting timeout constraints. Low-level
+  check execution is delegated to `Botica.Runner.CheckRunner`.
   """
 
-  alias Botica.Check.Result
+  alias Botica.Runner.CheckRunner
   alias Botica.Runner.Sequencer
   alias Botica.Types
 
@@ -19,33 +20,16 @@ defmodule Botica.Runner.Executor do
 
   @doc """
   Executes all checks in parallel and returns structured results.
-
-  ## Options
-
-  - `:timeout` - Global timeout in milliseconds for each check (default: 30_000)
-  - `:stop_on_first_error` - Stop executing remaining checks after first error
-  - `:continue_on_error` - Continue executing checks even if some fail (default: true)
-
-  ## Per-check timeouts
-
-  Individual checks can specify their own timeout in their definition:
-
-      %{
-        id: :slow_check,
-        timeout: 5000,  # This check gets 5 seconds instead of global 30s
-        check: fn -> ... end
-      }
-
-  ## Timeout behavior
-
-  When a check times out, it returns an error result with a descriptive message.
-  The timeout is applied per-check, not for the entire run.
   """
   @spec execute(Types.config()) :: {:ok, [Types.result()]} | {:error, String.t()}
   def execute(config) do
     execute(config, [])
   end
 
+  @doc """
+  Executes all checks in parallel with custom options. See module
+  `@moduledoc` for the option list.
+  """
   @spec execute(Types.config(), Types.executor_options()) ::
           {:ok, [Types.result()]} | {:error, String.t()}
   def execute(config, opts) when is_list(opts) do
@@ -76,7 +60,9 @@ defmodule Botica.Runner.Executor do
 
         results =
           Enum.map(sorted, fn check ->
-            {:ok, result} = execute_single_check(check, @default_timeout)
+            {:ok, result} =
+              CheckRunner.run_check(check, Map.get(check, :timeout, @default_timeout))
+
             result
           end)
 
@@ -89,37 +75,20 @@ defmodule Botica.Runner.Executor do
 
   # Private functions
 
-  defp validate_config(config) do
-    cond do
-      not is_map(config) ->
-        {:error, "config must be a map"}
-
-      not is_binary(Map.get(config, :app_name, "")) ->
-        {:error, "config.app_name must be a string"}
-
-      not is_list(Map.get(config, :checks, nil)) ->
-        {:error, "config.checks must be a list"}
-
-      true ->
-        :ok
-    end
-  end
+  @doc false
+  defdelegate validate_config(config), to: Botica.Validation
 
   defp run_checks(checks, opts, run_opts) do
-    timeout = Keyword.get(opts, :timeout, @default_timeout)
+    effective_timeout = Keyword.get(opts, :timeout, @default_timeout)
     continue_on_error = Keyword.get(run_opts, :continue_on_error, true)
     stop_on_first_error = Keyword.get(run_opts, :stop_on_first_error, false)
 
-    # Build check functions with timeout support
     funs =
       Enum.map(checks, fn check ->
-        check_timeout = Map.get(check, :timeout, timeout)
-        fn -> execute_single_check(check, check_timeout) end
+        check_timeout = Map.get(check, :timeout, effective_timeout)
+        fn -> CheckRunner.run_check(check, check_timeout) end
       end)
 
-    # stop_on_first_error takes precedence: halt at the first error
-    # regardless of continue_on_error. Otherwise, if continue_on_error
-    # is false, stop on the first error. Otherwise, run in parallel.
     cond do
       stop_on_first_error ->
         run_sequential_with_short_circuit(checks, funs, true, true)
@@ -134,7 +103,7 @@ defmodule Botica.Runner.Executor do
           funs
           |> Task.async_stream(fn fun -> fun.() end,
             max_concurrency: max_concurrency,
-            timeout: timeout + 1_000,
+            timeout: effective_timeout + 1_000,
             ordered: true
           )
           |> Enum.map(fn
@@ -142,7 +111,7 @@ defmodule Botica.Runner.Executor do
             {:exit, reason} -> {:error, %{error: reason}}
           end)
 
-        results = process_results(checks, raw_results)
+        results = process_results(checks, raw_results, effective_timeout)
         {:ok, results}
     end
   end
@@ -180,51 +149,9 @@ defmodule Botica.Runner.Executor do
     end
   end
 
-  defp execute_single_check(check, timeout) do
-    effective_timeout = timeout || @default_timeout
-
-    task =
-      Task.async(fn ->
-        try do
-          case check.check.() do
-            {:ok, msg} -> {:ok, Result.build(check, :ok, msg)}
-            {:warning, msg} -> {:ok, Result.build(check, :warning, msg)}
-            {:error, msg} -> {:ok, Result.build(check, :error, msg)}
-          end
-        rescue
-          error ->
-            {:ok, Result.from_exception(check, error)}
-        end
-      end)
-
-    result = Task.await(task, effective_timeout)
-
-    case result do
-      {:ok, _} = ok -> ok
-      {:error, reason} -> {:error, %{error: reason}}
-    end
-  catch
-    :exit, _reason ->
-      {:ok, Result.from_timeout(check, timeout || @default_timeout)}
-  end
-
-  defp process_results(checks, raw_results) do
+  defp process_results(checks, raw_results, effective_timeout) do
     checks
-    |> Enum.with_index()
-    |> Enum.map(fn {check, idx} ->
-      case Enum.at(raw_results, idx) do
-        {:ok, result} when is_map(result) ->
-          result
-
-        {:error, %{error: :timeout}} ->
-          Result.from_timeout(check, @default_timeout)
-
-        {:error, %{error: exc}} ->
-          Result.from_exception(check, exc)
-
-        other ->
-          Result.build(check, :error, "unexpected: #{inspect(other)}")
-      end
-    end)
+    |> Enum.zip(raw_results)
+    |> Enum.map(fn {check, raw} -> CheckRunner.resolve_result(check, raw, effective_timeout) end)
   end
 end

@@ -19,6 +19,7 @@ defmodule Botica.MixProject do
         maintainers: ["Lorenzo Sánchez"]
       ],
       docs: docs(),
+      aliases: aliases(),
       test_coverage: [tool: ExCoveralls],
       dialyzer: dialyzer_config()
     ]
@@ -27,18 +28,20 @@ defmodule Botica.MixProject do
   def application do
     [
       extra_applications: [:logger],
-      # Inicia el árbol de supervisión de Botica, incluyendo el GenServer
-      # de Flags (Botica.Flags.Store). Los consumidores pueden sobreescribir
-      # esto poniendo su propio módulo en Application.replace_env(:botica, :application_module, ...).
       mod: {Botica.Application, []}
     ]
   end
 
   defp deps do
     [
-      {:apero, "~> 3.1.0"},
-      {:arrea, "~> 2.2.0"},
-      {:trebejo, "~> 1.0.0"},
+      # Path-only deps: apero / arrea / trebejo are sibling workspaces
+      # inside this monorepo. They are intentionally NOT pinned to a
+      # hex version because the published versions lag behind the
+      # monorepo. For external consumers, replace these `path:` entries
+      # with the equivalent hex ranges.
+      {:apero, path: "../apero"},
+      {:arrea, path: "../arrea", override: true},
+      {:trebejo, path: "../trebejo"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
@@ -51,7 +54,7 @@ defmodule Botica.MixProject do
       main: "readme",
       source_url: "https://github.com/Lorenzo-SF/botica",
       homepage_url: "https://github.com/Lorenzo-SF/botica",
-      source_ref: "3.0.0",
+      source_ref: "2.1.0",
       extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"],
       groups_for_modules: [
         Core: [Botica, Botica.Doctor, Botica.Types],
@@ -75,6 +78,12 @@ defmodule Botica.MixProject do
       plt_core_path: "priv/plts/core",
       plt_add_apps: [:mix],
       flags: [:error_handling, :no_opaque, :no_underspecs]
+    ]
+  end
+
+  defp aliases do
+    [
+      "botica:config": ["run -e 'Botica.Flags.Doc.generate()'"]
     ]
   end
 end
