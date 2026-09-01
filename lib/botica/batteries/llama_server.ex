@@ -185,64 +185,80 @@ defmodule Botica.Batteries.LlamaServer do
       |> Map.merge(config)
       |> maybe_apply_device(Map.get(config, :hardware_plan))
 
-    _ = if not Map.has_key?(merged, :gguf_path) do
-      raise ArgumentError, "Botica build_args config must include :gguf_path"
-    end
+    _ =
+      if not Map.has_key?(merged, :gguf_path) do
+        raise ArgumentError, "Botica build_args config must include :gguf_path"
+      end
 
     _base =
       [
-        "--model", Map.fetch!(merged, :gguf_path),
-        "--host", Map.get(merged, :host, "127.0.0.1"),
-        "--port", to_string(Map.fetch!(merged, :port)),
-        "--api-key", Map.get(merged, :api_key, "sk-local-dev-key"),
-        "--alias", Map.get(merged, :alias, "default"),
-        "--ctx-size", to_string(merged[:ctx_size] || 8192),
-        "--n-gpu-layers", to_string(Map.get(merged, :n_gpu_layers, 0)),
-        "--cache-type-k", to_string(merged[:cache_type_k] || "q8_0"),
-        "--cache-type-v", to_string(merged[:cache_type_v] || "q8_0"),
-        "--batch-size", to_string(merged[:batch_size] || 1024),
-        "--ubatch-size", to_string(merged[:ubatch_size] || 1024),
-        "--parallel", to_string(merged[:parallel] || 1),
-        "--threads", to_string(merged[:threads] || 12),
-        "--threads-batch", to_string(merged[:threads_batch] || 24)
-      ] ++ role_specific_args(role, merged)
-        ++ boolean_flag("--cont-batching", merged[:cont_batching])
-        ++ boolean_flag("--cache-prompt", merged[:cache_prompt])
-        ++ boolean_flag("--kv-unified", merged[:kv_unified])
-        ++ boolean_flag("--jinja", merged[:jinja])
-        ++ boolean_flag("--metrics", merged[:metrics])
-        ++ load_mode_flag(merged[:no_mmap])
-        ++ optional_flag("--flash-attn", merged[:flash_attn])
-        ++ optional_flag("--slot-save-path", merged[:slot_save_path])
-        ++ optional_flag("--reasoning-format", merged[:reasoning_format])
-        ++ optional_flag("--temp", merged[:temp], &Float.to_string/1)
-        ++ optional_flag("--top-p", merged[:top_p], &Float.to_string/1)
-        ++ optional_flag("--top-k", merged[:top_k])
-        ++ optional_flag("--keep", merged[:keep])
-        ++ optional_flag("--n-predict", merged[:n_predict])
-        ++ optional_flag("--prio", merged[:prio])
-        ++ optional_flag("--slot-prompt-similarity", merged[:slot_prompt_similarity])
-        ++ optional_flag("--spec-type", merged[:spec_type])
-        ++ optional_flag("--spec-ngram-mod-n-min", merged[:spec_ngram_mod_n_min])
-        ++ optional_flag("--spec-ngram-mod-n-max", merged[:spec_ngram_mod_n_max])
-        ++ optional_flag("--spec-ngram-mod-n-match", merged[:spec_ngram_mod_n_match])
-        ++ optional_flag("--embedding", merged[:embedding])
-        ++ optional_flag("--pooling", merged[:pooling])
-        ++ optional_flag("--embd-normalize", merged[:embd_normalize])
-        ++ optional_flag("--device", merged[:device])
-        ++ boolean_flag("--no-kv-offload", merged[:no_kv_offload])
-        ++ boolean_flag("--no-op-offload", merged[:no_op_offload])
-        ++ boolean_flag("--no-host", merged[:no_host])
-        ++ boolean_flag("--no-mmproj-offload", merged[:no_mmproj_offload])
-        ++ optional_flag("--fit", merged[:fit])
-        ++ (config[:extra_args] || [])
+        "--model",
+        Map.fetch!(merged, :gguf_path),
+        "--host",
+        Map.get(merged, :host, "127.0.0.1"),
+        "--port",
+        to_string(Map.fetch!(merged, :port)),
+        "--api-key",
+        Map.get(merged, :api_key, "sk-local-dev-key"),
+        "--alias",
+        Map.get(merged, :alias, "default"),
+        "--ctx-size",
+        to_string(merged[:ctx_size] || 8192),
+        "--n-gpu-layers",
+        to_string(Map.get(merged, :n_gpu_layers, 0)),
+        "--cache-type-k",
+        to_string(merged[:cache_type_k] || "q8_0"),
+        "--cache-type-v",
+        to_string(merged[:cache_type_v] || "q8_0"),
+        "--batch-size",
+        to_string(merged[:batch_size] || 1024),
+        "--ubatch-size",
+        to_string(merged[:ubatch_size] || 1024),
+        "--parallel",
+        to_string(merged[:parallel] || 1),
+        "--threads",
+        to_string(merged[:threads] || 12),
+        "--threads-batch",
+        to_string(merged[:threads_batch] || 24)
+      ] ++
+        role_specific_args(role, merged) ++
+        boolean_flag("--cont-batching", merged[:cont_batching]) ++
+        boolean_flag("--cache-prompt", merged[:cache_prompt]) ++
+        boolean_flag("--kv-unified", merged[:kv_unified]) ++
+        boolean_flag("--jinja", merged[:jinja]) ++
+        boolean_flag("--metrics", merged[:metrics]) ++
+        load_mode_flag(merged[:no_mmap]) ++
+        optional_flag("--flash-attn", merged[:flash_attn]) ++
+        optional_flag("--slot-save-path", merged[:slot_save_path]) ++
+        optional_flag("--reasoning-format", merged[:reasoning_format]) ++
+        optional_flag("--temp", merged[:temp], &Float.to_string/1) ++
+        optional_flag("--top-p", merged[:top_p], &Float.to_string/1) ++
+        optional_flag("--top-k", merged[:top_k]) ++
+        optional_flag("--keep", merged[:keep]) ++
+        optional_flag("--n-predict", merged[:n_predict]) ++
+        optional_flag("--prio", merged[:prio]) ++
+        optional_flag("--slot-prompt-similarity", merged[:slot_prompt_similarity]) ++
+        optional_flag("--spec-type", merged[:spec_type]) ++
+        optional_flag("--spec-ngram-mod-n-min", merged[:spec_ngram_mod_n_min]) ++
+        optional_flag("--spec-ngram-mod-n-max", merged[:spec_ngram_mod_n_max]) ++
+        optional_flag("--spec-ngram-mod-n-match", merged[:spec_ngram_mod_n_match]) ++
+        optional_flag("--embedding", merged[:embedding]) ++
+        optional_flag("--pooling", merged[:pooling]) ++
+        optional_flag("--embd-normalize", merged[:embd_normalize]) ++
+        optional_flag("--device", merged[:device]) ++
+        boolean_flag("--no-kv-offload", merged[:no_kv_offload]) ++
+        boolean_flag("--no-op-offload", merged[:no_op_offload]) ++
+        boolean_flag("--no-host", merged[:no_host]) ++
+        boolean_flag("--no-mmproj-offload", merged[:no_mmproj_offload]) ++
+        optional_flag("--fit", merged[:fit]) ++
+        (config[:extra_args] || [])
   end
 
   defp role_specific_args(:chat, _merged), do: []
 
   # `--embedding` is handled by `optional_flag/3` below for both roles,
   # so this clause is intentionally empty.
-  defp role_specific_args(:embedding, _merged), do: [] 
+  defp role_specific_args(:embedding, _merged), do: []
 
   # If `n_gpu_layers` is `:auto`, resolve from the hardware plan.
   defp maybe_apply_device(merged, %{device: :cpu}), do: Map.put(merged, :n_gpu_layers, 0)
@@ -259,6 +275,7 @@ defmodule Botica.Batteries.LlamaServer do
   defp optional_flag(_flag, nil, _formatter), do: []
   defp optional_flag(_flag, false, _formatter), do: []
   defp optional_flag(flag, true, _formatter), do: [flag]
+
   defp optional_flag(flag, value, formatter) when not is_boolean(value) and value != false,
     do: [flag, formatter.(value)]
 
@@ -266,9 +283,11 @@ defmodule Botica.Batteries.LlamaServer do
   defp optional_flag(_flag, nil), do: []
   defp optional_flag(_flag, false), do: []
   defp optional_flag(flag, true), do: [flag]
+
   defp optional_flag(flag, value) when not is_boolean(value) and value != false,
     do: [flag, to_string(value)]
-  defp optional_flag(_flag, _), do: [] 
+
+  defp optional_flag(_flag, _), do: []
 
   # Maps `no_mmap: true` → `--load-mode none` (replaces deprecated `--no-mmap`).
   defp load_mode_flag(true), do: ["--load-mode", "none"]
@@ -451,9 +470,13 @@ defmodule Botica.Batteries.LlamaServer do
   # llama-server requires this directory to already exist; missing it
   # causes exit code 1 with "not a directory".
   defp ensure_dir!(nil), do: :ok
+
   defp ensure_dir!(path) when is_binary(path) do
     File.mkdir_p!(path)
   rescue
-    e -> Logger.warning("[LlamaServer] could not create slot_save_path #{path}: #{Exception.message(e)}")
+    e ->
+      Logger.warning(
+        "[LlamaServer] could not create slot_save_path #{path}: #{Exception.message(e)}"
+      )
   end
 end

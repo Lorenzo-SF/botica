@@ -59,7 +59,7 @@ defmodule Botica.Flags do
   `for:` option is ignored.
   """
 
-  alias Botica.Flags.{Flag, Store}
+  alias Botica.Flags.{Flag, Rollout, Store}
 
   # ---------------------------------------------------------------------------
   # Define / mutate
@@ -195,27 +195,41 @@ defmodule Botica.Flags do
   end
 
   @doc """
-  Two-arity variant of `enabled?/1`. The `for:` argument is the entity
-  used to deterministically bucket into the rollout percentage — pass a
-  user id, session id, or any term that should get a stable answer.
+  Returns whether a flag is enabled for a given context.
+
+  Accepts either a keyword list with a `:for` entity (legacy) or a
+  context map with string keys:
+
+      # Legacy entity bucketing
+      Botica.Flags.enabled?(:flag, for: "user_42")
+
+      # Context map (user_list / attribute rollouts)
+      Botica.Flags.enabled?(:flag, %{"user" => "user_42", "tenant" => "acme"})
+
+  Behaviour:
+    * If the flag is not defined → returns `false`.
+    * If the flag is defined and `enabled: false` → returns `false`.
+    * If the flag is defined, `enabled: true`, and `rollout: nil`
+      → returns `true`.
+    * If the flag is defined, `enabled: true`, and has a rollout
+      → evaluates the rollout against the context (percentage bucket,
+      user list, or attribute match).
   """
-  @spec enabled?(atom(), keyword()) :: boolean()
-  def enabled?(name, opts) when is_atom(name) and is_list(opts) do
-    entity = Keyword.get(opts, :for)
+  @spec enabled?(atom(), keyword() | map()) :: boolean()
+  def enabled?(name, opts)
 
-    case Store.get(name) do
-      {:ok, %Flag{enabled: true, rollout: nil}} ->
-        true
+  def enabled?(name, opts) when is_list(opts) do
+    context =
+      case Keyword.fetch(opts, :for) do
+        {:ok, entity} -> %{"user" => entity}
+        :error -> %{}
+      end
 
-      {:ok, %Flag{enabled: true, rollout: pct}} when is_integer(pct) and pct >= 0 ->
-        bucket_for(name, entity) < pct
+    evaluate(name, context)
+  end
 
-      {:ok, %Flag{enabled: false}} ->
-        false
-
-      :error ->
-        false
-    end
+  def enabled?(name, context) when is_map(context) do
+    evaluate(name, context)
   end
 
   @doc """
@@ -242,11 +256,12 @@ defmodule Botica.Flags do
   # Internal
   # ---------------------------------------------------------------------------
 
-  # Stable, deterministic bucket in 0..99 for any term.
-  # Using :erlang.phash2 with range 100 keeps the same user in the same
-  # bucket across restarts (unlike :rand).
-  @spec bucket_for(atom(), term()) :: non_neg_integer()
-  defp bucket_for(flag_name, entity) do
-    :erlang.phash2({flag_name, entity}, 100)
+  # Shared evaluation: fetch the flag and delegate rollout logic.
+  @spec evaluate(atom(), map()) :: boolean()
+  defp evaluate(name, context) do
+    case Store.get(name) do
+      {:ok, flag} -> Rollout.evaluate(flag, context)
+      :error -> false
+    end
   end
 end
