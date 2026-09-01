@@ -24,7 +24,10 @@ defmodule Botica.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      Botica.Flags.Store
+      Botica.Flags.Store,
+      Botica.Flags.Persistence.Writer,
+      Botica.Scheduler,
+      Botica.Alerts
     ]
 
     opts = [strategy: :one_for_one, name: Botica.Supervisor]

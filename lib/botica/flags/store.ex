@@ -29,10 +29,9 @@ defmodule Botica.Flags.Store do
 
   use GenServer
 
-  alias Botica.Flags.Config
+  alias Botica.Flags.{Config, Flag, Persistence}
 
   @table :botica_flags
-
   # ---------------------------------------------------------------------------
   # Public API
   # ---------------------------------------------------------------------------
@@ -123,8 +122,10 @@ defmodule Botica.Flags.Store do
     # Create the ETS table with fast concurrent reads.
     :ets.new(@table, [:set, :named_table, :public, read_concurrency: true])
 
-    # Load defaults from application config on first startup, avoiding
-    # overriding any existing flags that may have been persisted.
+    # Load persisted flags first (source of truth), then apply defaults
+    # from application config only for flags that are not persisted.
+    load_persisted()
+
     if :ets.info(@table, :size) == 0 do
       Config.get()
       |> Enum.each(fn flag -> :ets.insert(@table, {flag.name, flag}) end)
@@ -151,6 +152,15 @@ defmodule Botica.Flags.Store do
 
     :ets.insert(@table, {fresh.name, fresh})
 
+    # Persist outside the GenServer mailbox so a slow disk never blocks
+    # flag mutations. The Writer serializes writes in mailbox order so
+    # concurrent mutations cannot race on the JSON file. Persistence
+    # failures are logged, not raised: the in-memory registry stays
+    # authoritative for the current run.
+    if Persistence.enabled?() do
+      Persistence.Writer.save(fresh)
+    end
+
     # Fire-and-forget telemetry: a slow listener must never block the
     # GenServer mailbox. Tasks are intentionally not linked (`:noproc`
     # from a long-dead VM would crash the GenServer otherwise).
@@ -165,6 +175,11 @@ defmodule Botica.Flags.Store do
   @impl true
   def handle_call({:delete, name}, _from, state) when is_atom(name) do
     :ets.delete(@table, name)
+
+    # Persist the removal — see `:put` handler for rationale.
+    if Persistence.enabled?() do
+      Persistence.Writer.delete(name)
+    end
 
     # Fire-and-forget telemetry — see `:put` handler for rationale.
     _ =
@@ -183,4 +198,29 @@ defmodule Botica.Flags.Store do
   # Catch-all for unexpected messages — ignore them silently.
   @impl true
   def handle_info(_msg, state), do: {:noreply, state}
+
+  # ---------------------------------------------------------------------------
+  # Persistence helpers
+  # ---------------------------------------------------------------------------
+
+  # Boot-time load: populate the ETS cache from the configured adapter.
+  # Failures are logged; defaults from config still apply.
+  defp load_persisted do
+    if Persistence.enabled?() do
+      {adapter, _opts} = Persistence.configured()
+
+      case adapter.load_all() do
+        {:ok, flags} when is_list(flags) ->
+          Enum.each(flags, fn %Flag{} = flag -> :ets.insert(@table, {flag.name, flag}) end)
+
+        {:error, reason} ->
+          require Logger
+          Logger.warning("[Botica.Flags] persistence load failed: #{inspect(reason)}")
+
+        other ->
+          require Logger
+          Logger.warning("[Botica.Flags] unexpected persistence load result: #{inspect(other)}")
+      end
+    end
+  end
 end

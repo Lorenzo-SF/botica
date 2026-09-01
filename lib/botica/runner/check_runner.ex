@@ -10,7 +10,7 @@ defmodule Botica.Runner.CheckRunner do
   alias Botica.Check.Result
   alias Botica.Types
 
-  @default_timeout 30_000
+  @default_timeout 5_000
 
   @doc """
   Runs a single check in an unlinked, monitored process with timeout.

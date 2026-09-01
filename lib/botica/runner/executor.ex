@@ -11,7 +11,7 @@ defmodule Botica.Runner.Executor do
   alias Botica.Runner.Sequencer
   alias Botica.Types
 
-  @default_timeout 30_000
+  @default_timeout 5_000
 
   # Cap Task.async_stream concurrency. Without this, a 1000-check
   # config launches 1000 processes simultaneously and can exhaust

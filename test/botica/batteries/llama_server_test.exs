@@ -84,7 +84,8 @@ defmodule Botica.Batteries.LlamaServerTest do
       assert "--kv-unified" in args
       assert "--jinja" in args
       assert "--metrics" in args
-      assert "--no-mmap" in args
+      assert "--load-mode" in args
+      assert "none" in args
       assert "--spec-type" in args
       assert "ngram-mod" in args
       assert "--reasoning-format" in args
@@ -113,7 +114,7 @@ defmodule Botica.Batteries.LlamaServerTest do
       refute "--kv-unified" in args
       refute "--jinja" in args
       refute "--metrics" in args
-      refute "--no-mmap" in args
+      refute "--load-mode" in args
     end
 
     test "raises when gguf_path missing" do

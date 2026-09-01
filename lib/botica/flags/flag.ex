@@ -11,18 +11,29 @@ defmodule Botica.Flags.Flag do
       Most flags use `default: false`; if you want safe-by-default for
       risky features, use `default: false`.
     * `:description` — Optional human-readable explanation
-    * `:rollout` — `0..100` percentage of users that get the feature when
-      `enabled: true`. `nil` means binary on/off (no gradual rollout).
+    * `:rollout` — Gradual rollout definition. Either a legacy integer
+      `0..100` percentage, or a map:
+        - `%{type: :percentage, value: 25}` — first 25% of entities
+        - `%{type: :user_list, users: ["lorenzo"]}` — explicit user list
+        - `%{type: :attribute, key: "tenant", values: ["acme"]}` — match
+          a context attribute against allowed values
+      `nil` means binary on/off (no gradual rollout).
     * `:created_at` — When the flag was first defined
     * `:updated_at` — Last modification timestamp
   """
+
+  @type rollout_t ::
+          non_neg_integer()
+          | %{type: :percentage, value: non_neg_integer()}
+          | %{type: :user_list, users: [String.t()]}
+          | %{type: :attribute, key: String.t(), values: [String.t()]}
 
   @type t :: %__MODULE__{
           name: atom(),
           enabled: boolean(),
           default: boolean(),
           description: String.t() | nil,
-          rollout: non_neg_integer() | nil,
+          rollout: rollout_t() | nil,
           created_at: DateTime.t(),
           updated_at: DateTime.t()
         }
@@ -69,9 +80,25 @@ defmodule Botica.Flags.Flag do
     }
   end
 
-  # Clamp rollout to 0..100. nil stays nil.
+  # Clamp integer rollout to 0..100 (legacy format). nil stays nil.
+  # Map rollouts are validated structurally and passed through.
   defp normalize_rollout(nil), do: nil
+
   defp normalize_rollout(pct) when is_integer(pct) and pct >= 0 and pct <= 100, do: pct
+
+  defp normalize_rollout(%{type: :percentage, value: value})
+       when is_integer(value) and value >= 0 and value <= 100 do
+    %{type: :percentage, value: value}
+  end
+
+  defp normalize_rollout(%{type: :user_list, users: users}) when is_list(users) do
+    %{type: :user_list, users: users}
+  end
+
+  defp normalize_rollout(%{type: :attribute, key: key, values: values})
+       when is_binary(key) and is_list(values) do
+    %{type: :attribute, key: key, values: values}
+  end
 
   defp normalize_rollout(pct) when is_integer(pct) and pct > 100 do
     require Logger
@@ -83,5 +110,23 @@ defmodule Botica.Flags.Flag do
     require Logger
     Logger.warning("[Botica.Flags] rollout #{pct} < 0, clamped to 0")
     0
+  end
+
+  defp normalize_rollout(%{type: :percentage, value: value}) when is_integer(value) and value > 100 do
+    require Logger
+    Logger.warning("[Botica.Flags] rollout percentage #{value} > 100, clamped to 100")
+    %{type: :percentage, value: 100}
+  end
+
+  defp normalize_rollout(%{type: :percentage, value: value}) when is_integer(value) and value < 0 do
+    require Logger
+    Logger.warning("[Botica.Flags] rollout percentage #{value} < 0, clamped to 0")
+    %{type: :percentage, value: 0}
+  end
+
+  defp normalize_rollout(other) do
+    require Logger
+    Logger.warning("[Botica.Flags] invalid rollout definition ignored: #{inspect(other)}")
+    nil
   end
 end

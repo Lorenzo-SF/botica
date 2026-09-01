@@ -39,9 +39,9 @@ defmodule Botica.MixProject do
       # hex version because the published versions lag behind the
       # monorepo. For external consumers, replace these `path:` entries
       # with the equivalent hex ranges.
-      {:apero, path: "../apero"},
-      {:arrea, path: "../arrea", override: true},
-      {:trebejo, path: "../trebejo"},
+      {:apero, git: "https://github.com/Lorenzo-SF/apero.git", override: true},
+      {:arrea, git: "https://github.com/Lorenzo-SF/arrea.git", override: true},
+      {:trebejo, git: "https://github.com/Lorenzo-SF/trebejo.git", override: true},                 
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
