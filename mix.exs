@@ -34,14 +34,17 @@ defmodule Botica.MixProject do
 
   defp deps do
     [
-      # Path-only deps: apero / arrea / trebejo are sibling workspaces
-      # inside this monorepo. They are intentionally NOT pinned to a
-      # hex version because the published versions lag behind the
-      # monorepo. For external consumers, replace these `path:` entries
-      # with the equivalent hex ranges.
+      # Path-only deps: apero / arrea are sibling workspaces inside
+      # this monorepo. They are intentionally NOT pinned to a hex
+      # version because the published versions lag behind the monorepo.
+      # For external consumers, replace these `git:` entries with the
+      # equivalent hex ranges.
       {:apero, git: "https://github.com/Lorenzo-SF/apero.git", override: true},
       {:arrea, git: "https://github.com/Lorenzo-SF/arrea.git", override: true},
-      {:trebejo, git: "https://github.com/Lorenzo-SF/trebejo.git", override: true},                 
+      # Trebejo is private; CI for the public repos cannot access it.
+      # Code uses Code.ensure_loaded?(Trebejo.…) guards to gracefully
+      # degrade when absent. Skipped entirely from deps.
+      # {:trebejo, git: "https://github.com/Lorenzo-SF/trebejo.git"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
