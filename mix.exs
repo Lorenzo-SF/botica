@@ -41,7 +41,9 @@ defmodule Botica.MixProject do
       # with the equivalent hex ranges.
       {:apero, git: "https://github.com/Lorenzo-SF/apero.git", override: true},
       {:arrea, git: "https://github.com/Lorenzo-SF/arrea.git", override: true},
-      {:trebejo, git: "https://github.com/Lorenzo-SF/trebejo.git", override: true},                 
+      # Trebejo is optional — Botica's batteries use it via Code.ensure_loaded?
+      # + alias indirection so batteries gracefully degrade when absent.
+      {:trebejo, git: "https://github.com/Lorenzo-SF/trebejo.git", optional: true, runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
