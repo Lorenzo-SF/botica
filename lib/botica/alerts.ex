@@ -95,6 +95,38 @@ defmodule Botica.Alerts do
   end
 
   @doc """
+  Formats an alert line with a severity-specific prefix.
+
+  ## Severity levels
+
+    * `:info` — blue `[i]` prefix
+    * `:warning` — yellow `[!]` prefix
+    * `:error` — red `[x]` prefix
+    * `:critical` — red `[X]` prefix (with double border)
+
+  ## Examples
+
+      iex> Botica.Alerts.format_alert(:warning, "Postgres latency > 1s")
+      "[!] Postgres latency > 1s"
+
+      iex> Botica.Alerts.format_alert(:critical, "Disk full")
+      "[X] Disk full"
+  """
+  @spec format_alert(atom(), String.t()) :: String.t()
+  def format_alert(severity, message) when is_atom(severity) and is_binary(message) do
+    prefix =
+      case severity do
+        :info -> "[i]"
+        :warning -> "[!]"
+        :error -> "[x]"
+        :critical -> "[X]"
+        _ -> "[?]"
+      end
+
+    "#{prefix} #{message}"
+  end
+
+  @doc """
   Resets the failure counter for a check (e.g. after manual intervention).
   """
   @spec reset(atom()) :: :ok
