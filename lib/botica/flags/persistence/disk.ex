@@ -17,10 +17,9 @@ defmodule Botica.Flags.Persistence.Disk do
 
   @behaviour Botica.Flags.Persistence
 
-  # `alias Elixir.File` must come AFTER `alias Apero.Atomic.File` — the
-  # last alias wins when both bind `File`.
-  alias Apero.Atomic.File
-  alias Elixir.File
+  # `File` is aliased to `Apero.Atomic.File` so writes are atomic
+  # (crash-safe). For regular reads we reach into `Elixir.File` explicitly.
+  alias Apero.Atomic.File, as: AtomicFile
   alias Botica.Flags.Flag
 
   @default_filename "flags.json"
@@ -39,7 +38,7 @@ defmodule Botica.Flags.Persistence.Disk do
          {:ok, flags} <- load_all(),
          updated = Map.put(flags_map(flags), flag.name, flag),
          {:ok, json} <- encode(updated) do
-      Apero.Atomic.File.write(path, json)
+      AtomicFile.write(path, json)
     end
   end
 
@@ -49,7 +48,7 @@ defmodule Botica.Flags.Persistence.Disk do
          {:ok, flags} <- load_all(),
          updated = Map.delete(flags_map(flags), name),
          {:ok, json} <- encode(updated) do
-      Apero.Atomic.File.write(path, json)
+      AtomicFile.write(path, json)
     end
   end
 
@@ -87,7 +86,7 @@ defmodule Botica.Flags.Persistence.Disk do
   end
 
   defp read_file(path) do
-    case File.read(path) do
+    case Elixir.File.read(path) do
       {:ok, contents} -> {:ok, contents}
       {:error, :enoent} -> {:ok, "{}"}
       {:error, reason} -> {:error, {:read, reason}}
