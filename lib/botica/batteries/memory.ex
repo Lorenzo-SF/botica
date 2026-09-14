@@ -10,7 +10,7 @@ defmodule Botica.Batteries.Memory do
 
   Uses `Apero.OS.type/0` to dispatch directly between Linux (`free`)
   and macOS (`vm_stat`) instead of a blind fallback. All command
-  execution is routed through `Trebejo.Util.run_cmd_legacy/3` with
+  execution is routed through `Trebejo.Util.run_cmd_legacy/3 (via safe_run_cmd_legacy/3)` with
   arg lists for consistent timeout handling and structured errors.
 
   ## Usage
@@ -66,7 +66,7 @@ defmodule Botica.Batteries.Memory do
   # ── Private ────────────────────────────────────────────────────────────────
 
   defp check_linux_memory(warning_threshold, error_threshold) do
-    case Util.run_cmd_legacy("cat", ["/proc/meminfo"], timeout: 5_000) do
+    case safe_run_cmd_legacy("cat", ["/proc/meminfo"], timeout: 5_000) do
       {output, 0} ->
         parse_linux_memory(output, warning_threshold, error_threshold)
 
@@ -76,7 +76,7 @@ defmodule Botica.Batteries.Memory do
   end
 
   defp check_macos_memory(warning_threshold, error_threshold) do
-    case Util.run_cmd_legacy("vm_stat", [], timeout: 5_000) do
+    case safe_run_cmd_legacy("vm_stat", [], timeout: 5_000) do
       {output, 0} ->
         parse_macos_memory(output, warning_threshold, error_threshold)
 
@@ -170,6 +170,17 @@ defmodule Botica.Batteries.Memory do
 
       true ->
         {:ok, "Memory usage normal: #{used_percent}% used"}
+    end
+  end
+
+  # Safe wrapper for the optional Trebejo dep — returns a graceful
+  # fallback when the lib is absent (e.g. CI without private-repo access).
+  defp safe_run_cmd_legacy(cmd, args, opts \\ []) do
+    if Code.ensure_loaded?(Trebejo.Util) and
+         function_exported?(Trebejo.Util, :run_cmd_legacy, 3) do
+      apply(Trebejo.Util, :run_cmd_legacy, [cmd, args, opts])
+    else
+      {"trebejo not loaded", 127}
     end
   end
 end

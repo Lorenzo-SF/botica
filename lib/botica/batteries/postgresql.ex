@@ -8,12 +8,12 @@ defmodule Botica.Batteries.PostgreSQL do
 
   This module provides a ready-to-use check that verifies PostgreSQL
   is accessible. It prefers the `pg_isready` binary and falls back to
-  a raw TCP port check (via `Trebejo.Network.port_open?/3`) when the
+  a raw TCP port check (via `Trebejo.safe_port_open/3`) when the
   binary is not installed.
 
   All command execution uses arg lists — never interpolated into
   shell strings — to prevent shell injection. Routed through
-  `Trebejo.Util.run_cmd_legacy/3` for consistent timeout handling
+  `Trebejo.safe_run_cmd_legacy/3` for consistent timeout handling
   and structured errors.
 
   ## Usage
@@ -59,16 +59,16 @@ defmodule Botica.Batteries.PostgreSQL do
   Checks if PostgreSQL is ready to accept connections.
 
   Uses `pg_isready` when available. Falls back to a TCP probe on the
-  configured port via `Trebejo.Network.port_open?/3` when the binary is
+  configured port via `Trebejo.safe_port_open/3` when the binary is
   not installed.
   """
   @spec check_connection(String.t(), non_neg_integer(), String.t()) :: Botica.Types.check_result()
   def check_connection(host, port, user) do
     cond do
-      Command.command_exists?("pg_isready") ->
+      safe_command_exists("pg_isready") ->
         check_via_pg_isready(host, port, user)
 
-      Network.port_open?(host, port, timeout: 2_000) ->
+      safe_port_open(host, port, timeout: 2_000) ->
         {:ok, "PostgreSQL port #{port} is open at #{host} (pg_isready not installed)"}
 
       true ->
@@ -92,7 +92,7 @@ defmodule Botica.Batteries.PostgreSQL do
   # ── Private helpers ───────────────────────────────────────────────────────
 
   defp check_via_pg_isready(host, port, user) do
-    case Util.run_cmd_legacy("pg_isready", ["-h", host, "-p", to_string(port), "-U", user],
+    case safe_run_cmd_legacy("pg_isready", ["-h", host, "-p", to_string(port), "-U", user],
            timeout: 5_000
          ) do
       {_output, 0} ->
@@ -104,8 +104,8 @@ defmodule Botica.Batteries.PostgreSQL do
   end
 
   defp check_sudo_available do
-    if Command.command_exists?("sudo") do
-      case Util.run_cmd_legacy("sudo", ["-n", "true"]) do
+    if safe_command_exists("sudo") do
+      case safe_run_cmd_legacy("sudo", ["-n", "true"]) do
         {_, 0} ->
           :ok
 
@@ -118,12 +118,43 @@ defmodule Botica.Batteries.PostgreSQL do
   end
 
   defp run_sudo_systemctl(action, service) do
-    case Util.run_cmd_legacy("sudo", ["systemctl", action, service], timeout: 30_000) do
+    case safe_run_cmd_legacy("sudo", ["systemctl", action, service], timeout: 30_000) do
       {_, 0} ->
         :ok
 
       {output, code} ->
         {:error, "systemctl #{action} #{service} failed (exit #{code}): #{String.trim(output)}"}
+    end
+  end
+
+  # ── Safe wrappers around optional ecosystem deps (Trebejo + Arrea) ──
+  # These libs may be absent in CI; the wrappers return a graceful
+  # fallback via Code.ensure_loaded? + function_exported? + apply/3.
+
+  defp safe_command_exists(cmd) do
+    if Code.ensure_loaded?(Arrea.Command) and
+         function_exported?(Arrea.Command, :command_exists?, 1) do
+      apply(Arrea.Command, :command_exists?, [cmd])
+    else
+      false
+    end
+  end
+
+  defp safe_port_open(host, port, opts) do
+    if Code.ensure_loaded?(Trebejo.Network) and
+         function_exported?(Trebejo.Network, :port_open?, 3) do
+      apply(Trebejo.Network, :port_open?, [host, port, opts])
+    else
+      false
+    end
+  end
+
+  defp safe_run_cmd_legacy(cmd, args, opts \\ []) do
+    if Code.ensure_loaded?(Trebejo.Util) and
+         function_exported?(Trebejo.Util, :run_cmd_legacy, 3) do
+      apply(Trebejo.Util, :run_cmd_legacy, [cmd, args, opts])
+    else
+      {"trebejo not loaded", 127}
     end
   end
 end
