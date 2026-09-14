@@ -126,6 +126,7 @@ defmodule Botica.Batteries.Disk do
   defp safe_run_cmd_legacy(cmd, args, opts) do
     if Code.ensure_loaded?(Trebejo.Util) and
          function_exported?(Trebejo.Util, :run_cmd_legacy, 3) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(Trebejo.Util, :run_cmd_legacy, [cmd, args, opts])
     else
       {"trebejo not loaded", 127}

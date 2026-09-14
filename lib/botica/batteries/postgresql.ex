@@ -131,6 +131,7 @@ defmodule Botica.Batteries.PostgreSQL do
   defp safe_command_exists(cmd) do
     if Code.ensure_loaded?(Arrea.Command) and
          function_exported?(Arrea.Command, :command_exists?, 1) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(Arrea.Command, :command_exists?, [cmd])
     else
       false
@@ -140,6 +141,7 @@ defmodule Botica.Batteries.PostgreSQL do
   defp safe_port_open(host, port, opts) do
     if Code.ensure_loaded?(Trebejo.Network) and
          function_exported?(Trebejo.Network, :port_open?, 3) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(Trebejo.Network, :port_open?, [host, port, opts])
     else
       false
@@ -149,6 +151,7 @@ defmodule Botica.Batteries.PostgreSQL do
   defp safe_run_cmd_legacy(cmd, args, opts \\ []) do
     if Code.ensure_loaded?(Trebejo.Util) and
          function_exported?(Trebejo.Util, :run_cmd_legacy, 3) do
+      # credo:disable-for-next-line Credo.Check.Refactor.Apply
       apply(Trebejo.Util, :run_cmd_legacy, [cmd, args, opts])
     else
       {"trebejo not loaded", 127}
