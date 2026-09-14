@@ -21,6 +21,7 @@ defmodule Botica.Flags.Persistence.Disk do
   # last alias wins when both bind `File`.
   alias Apero.Atomic.File
   alias Elixir.File
+  alias Botica.Flags.Flag
 
   @default_filename "flags.json"
 

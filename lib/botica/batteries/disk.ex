@@ -123,7 +123,7 @@ defmodule Botica.Batteries.Disk do
 
   # Safe wrapper for the optional Trebejo dep — returns a graceful
   # fallback when the lib is absent (e.g. CI without private-repo access).
-  defp safe_run_cmd_legacy(cmd, args, opts \\ []) do
+  defp safe_run_cmd_legacy(cmd, args, opts) do
     if Code.ensure_loaded?(Trebejo.Util) and
          function_exported?(Trebejo.Util, :run_cmd_legacy, 3) do
       apply(Trebejo.Util, :run_cmd_legacy, [cmd, args, opts])
