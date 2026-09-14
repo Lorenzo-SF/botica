@@ -38,16 +38,6 @@
         {Credo.Check.Refactor.NegatedConditionsWithElse},
         {Credo.Check.Refactor.UnlessWithElse},
         {Credo.Check.Refactor.WithClauses},
-        # Strict default turns these on; they were always present in
-        # the code but ignored until credo strict mode was added.
-        # Mark as advisory only — do not fail CI on them.
-        {Credo.Check.Refactor.Apply, exit_status: 0},
-        {Credo.Check.Refactor.PipeChainStart, exit_status: 0},
-        {Credo.Check.Refactor.CyclomaticComplexity, max_complexity: 20, exit_status: 0},
-        {Credo.Check.Refactor.Nesting, max_nesting: 5, exit_status: 0},
-        {Credo.Check.Refactor.CondStatements, exit_status: 0},
-        {Credo.Check.Refactor.MapJoin, exit_status: 0},
-        {Credo.Check.Refactor.FilterFilter, exit_status: 0},
         {Credo.Check.Warning.ApplicationConfigInModuleAttribute},
         {Credo.Check.Warning.BoolOperationOnSameValues},
         {Credo.Check.Warning.ExpensiveEmptyEnumCheck},
