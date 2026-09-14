@@ -1,5 +1,4 @@
 defmodule Botica.Batteries.Disk do
-  alias Trebejo.Util
 
   @moduledoc """
   Predefined health check for disk space usage.
