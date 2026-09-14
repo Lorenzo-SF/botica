@@ -87,6 +87,15 @@ defmodule Botica.Alerts do
   Returns the current consecutive failure count for a check.
   """
   @spec failures(atom()) :: non_neg_integer()
+  def failures(check_id) when is_atom(check_id) do
+    case :ets.lookup(@table, check_id) do
+      [{^check_id, count}] -> count
+      [] -> 0
+    end
+  end
+
+  @doc """
+  Formats an alert line with a severity-specific prefix.
 
   ## Severity levels
 
@@ -115,12 +124,6 @@ defmodule Botica.Alerts do
       end
 
     "#{prefix} #{message}"
-  end
-  def failures(check_id) when is_atom(check_id) do
-    case :ets.lookup(@table, check_id) do
-      [{^check_id, count}] -> count
-      [] -> 0
-    end
   end
 
   @doc """
