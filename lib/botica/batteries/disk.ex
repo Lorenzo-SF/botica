@@ -7,7 +7,7 @@ defmodule Botica.Batteries.Disk do
   This module provides a check that monitors disk consumption
   and warns when available space falls below safe thresholds.
 
-  Uses `Trebejo.Util.run_cmd_legacy/3` with arg lists — never
+  Uses `Trebejo.Util.run_cmd_legacy/3 (via safe_run_cmd_legacy/3)` with arg lists — never
   interpolated into shell strings — to prevent shell injection.
   The `LC_ALL=C` env var ensures locale-stable output.
 
@@ -60,7 +60,7 @@ defmodule Botica.Batteries.Disk do
     # headers (Filesystem, Use%, etc.).
     env = %{"LC_ALL" => "C"}
 
-    case Util.run_cmd_legacy("df", ["-k", path], timeout: 5_000, env: env) do
+    case safe_run_cmd_legacy("df", ["-k", path], timeout: 5_000, env: env) do
       {output, 0} ->
         parse_df_output(output, warning_threshold, error_threshold)
 
@@ -121,4 +121,15 @@ defmodule Botica.Batteries.Disk do
 
   defp validate_percentage(val) when val in 0..100, do: val
   defp validate_percentage(_), do: nil
+
+  # Safe wrapper for the optional Trebejo dep — returns a graceful
+  # fallback when the lib is absent (e.g. CI without private-repo access).
+  defp safe_run_cmd_legacy(cmd, args, opts \\ []) do
+    if Code.ensure_loaded?(Trebejo.Util) and
+         function_exported?(Trebejo.Util, :run_cmd_legacy, 3) do
+      apply(Trebejo.Util, :run_cmd_legacy, [cmd, args, opts])
+    else
+      {"trebejo not loaded", 127}
+    end
+  end
 end

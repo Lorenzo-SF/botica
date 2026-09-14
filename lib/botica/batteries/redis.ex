@@ -63,10 +63,10 @@ defmodule Botica.Batteries.Redis do
   @spec check_connection(String.t(), non_neg_integer()) :: Botica.Types.check_result()
   def check_connection(host, port) do
     cond do
-      Command.command_exists?("redis-cli") ->
+      safe_command_exists("redis-cli") ->
         check_via_redis_cli(host, port)
 
-      Network.port_open?(host, port, timeout: 2_000) ->
+      safe_port_open(host, port, timeout: 2_000) ->
         {:ok, "Redis port #{port} is open at #{host} (redis-cli not installed)"}
 
       true ->
@@ -93,7 +93,7 @@ defmodule Botica.Batteries.Redis do
   # ── Private helpers ───────────────────────────────────────────────────────
 
   defp check_via_redis_cli(host, port) do
-    case Util.run_cmd_legacy("redis-cli", ["-h", host, "-p", to_string(port), "ping"],
+    case safe_run_cmd_legacy("redis-cli", ["-h", host, "-p", to_string(port), "ping"],
            timeout: 5_000
          ) do
       {"PONG\r\n" <> _, 0} ->
@@ -115,8 +115,8 @@ defmodule Botica.Batteries.Redis do
   end
 
   defp check_sudo_available do
-    if Command.command_exists?("sudo") do
-      case Util.run_cmd_legacy("sudo", ["-n", "true"]) do
+    if safe_command_exists("sudo") do
+      case safe_run_cmd_legacy("sudo", ["-n", "true"]) do
         {_, 0} ->
           :ok
 
@@ -139,7 +139,7 @@ defmodule Botica.Batteries.Redis do
   end
 
   defp try_start_unit(unit) do
-    case Util.run_cmd_legacy("sudo", ["systemctl", "start", unit], timeout: 30_000) do
+    case safe_run_cmd_legacy("sudo", ["systemctl", "start", unit], timeout: 30_000) do
       {_, 0} ->
         {:ok, "Redis service started (unit: #{unit})"}
 
@@ -156,5 +156,36 @@ defmodule Botica.Batteries.Redis do
       end)
 
     "Failed to start Redis (tried all unit names):\n#{details}"
+  end
+
+  # ── Safe wrappers around optional ecosystem deps (Trebejo + Arrea) ──
+  # These libs may be absent in CI; the wrappers return a graceful
+  # fallback via Code.ensure_loaded? + function_exported? + apply/3.
+
+  defp safe_command_exists(cmd) do
+    if Code.ensure_loaded?(Arrea.Command) and
+         function_exported?(Arrea.Command, :command_exists?, 1) do
+      apply(Arrea.Command, :command_exists?, [cmd])
+    else
+      false
+    end
+  end
+
+  defp safe_port_open(host, port, opts) do
+    if Code.ensure_loaded?(Trebejo.Network) and
+         function_exported?(Trebejo.Network, :port_open?, 3) do
+      apply(Trebejo.Network, :port_open?, [host, port, opts])
+    else
+      false
+    end
+  end
+
+  defp safe_run_cmd_legacy(cmd, args, opts \\ []) do
+    if Code.ensure_loaded?(Trebejo.Util) and
+         function_exported?(Trebejo.Util, :run_cmd_legacy, 3) do
+      apply(Trebejo.Util, :run_cmd_legacy, [cmd, args, opts])
+    else
+      {"trebejo not loaded", 127}
+    end
   end
 end
