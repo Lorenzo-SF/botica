@@ -1,6 +1,5 @@
 defmodule Botica.Batteries.Memory do
   alias Apero.OS
-  alias Trebejo.Util
 
   @moduledoc """
   Predefined health check for system memory usage.

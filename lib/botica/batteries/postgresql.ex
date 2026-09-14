@@ -1,7 +1,4 @@
 defmodule Botica.Batteries.PostgreSQL do
-  alias Arrea.Command
-  alias Trebejo.Network
-  alias Trebejo.Util
 
   @moduledoc """
   Predefined health check for PostgreSQL database connectivity.

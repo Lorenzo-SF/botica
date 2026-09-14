@@ -1,7 +1,4 @@
 defmodule Botica.Batteries.Redis do
-  alias Arrea.Command
-  alias Trebejo.Network
-  alias Trebejo.Util
 
   @moduledoc """
   Predefined health check for Redis cache server.
@@ -96,10 +93,7 @@ defmodule Botica.Batteries.Redis do
     case safe_run_cmd_legacy("redis-cli", ["-h", host, "-p", to_string(port), "ping"],
            timeout: 5_000
          ) do
-      {"PONG\r\n" <> _, 0} ->
-        {:ok, "Redis is responding at #{host}:#{port}"}
-
-      {"PONG\n" <> _, 0} ->
+      {<<"PONG", _rest::binary>>, 0} ->
         {:ok, "Redis is responding at #{host}:#{port}"}
 
       {output, 0} ->
