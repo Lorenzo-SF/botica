@@ -102,7 +102,7 @@ defmodule Botica.Batteries.PostgreSQL do
 
   defp check_sudo_available do
     if safe_command_exists("sudo") do
-      case safe_run_cmd_legacy("sudo", ["-n", "true"]) do
+      case safe_run_cmd_legacy("sudo", ["-n", "true"], []) do
         {_, 0} ->
           :ok
 
