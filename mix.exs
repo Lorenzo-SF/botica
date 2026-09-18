@@ -4,7 +4,7 @@ defmodule Botica.MixProject do
   def project do
     [
       app: :botica,
-      version: "2.1.0",
+      version: "2.1.1",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -37,8 +37,8 @@ defmodule Botica.MixProject do
       # Sibling deps as Hex requirements: apero / arrea are published
       # on hex.pm before botica releases, so external consumers resolve
       # everything from hex.
-      {:apero, "~> 4.0", override: true},
-      {:arrea, "~> 3.0", override: true},
+      {:apero, "~> 4.0"},
+      {:arrea, "~> 3.0"},
       # Trebejo is private; CI for the public repos cannot access it.
       # Code uses Code.ensure_loaded?(Trebejo.…) guards to gracefully
       # degrade when absent. Skipped entirely from deps.
@@ -55,7 +55,7 @@ defmodule Botica.MixProject do
       main: "readme",
       source_url: "https://github.com/Lorenzo-SF/botica",
       homepage_url: "https://github.com/Lorenzo-SF/botica",
-      source_ref: "2.1.0",
+      source_ref: "2.1.1",
       extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"],
       groups_for_modules: [
         Core: [

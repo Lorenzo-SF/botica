@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [2.1.0] - 2026-09-18
+## [2.1.1] - 2026-09-18
+
+> Note: `2.1.0` was published on hex.pm from pre-release state and
+> can no longer be replaced (hex allows `--replace` only within one
+> hour). This `2.1.1` carries the full 2.1.x content; pin to
+> `~> 2.1` to get it.
 
 ### Fixed
 - **`Botica.Runner.Executor.execute_single_check/2`** — three real
@@ -153,10 +158,11 @@ into this single canonical `2.0.0` entry.
 ### Added
 - Initial open source release: feature flags, task supervisor.
 
+[2.1.1]: https://hex.pm/packages/botica/2.1.1
 [2.1.0]: https://hex.pm/packages/botica/2.1.0
 [2.0.0]: https://hex.pm/packages/botica/2.0.0
 [1.0.0]: https://hex.pm/packages/botica/1.0.0
-[Unreleased]: https://github.com/Lorenzo-SF/botica/compare/2.1.0...HEAD
+[Unreleased]: https://github.com/Lorenzo-SF/botica/compare/2.1.1...HEAD
 
 
 > ## A note on history
