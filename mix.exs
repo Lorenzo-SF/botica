@@ -34,13 +34,11 @@ defmodule Botica.MixProject do
 
   defp deps do
     [
-      # Path-only deps: apero / arrea are sibling workspaces inside
-      # this monorepo. They are intentionally NOT pinned to a hex
-      # version because the published versions lag behind the monorepo.
-      # For external consumers, replace these `git:` entries with the
-      # equivalent hex ranges.
-      {:apero, git: "https://github.com/Lorenzo-SF/apero.git", override: true},
-      {:arrea, git: "https://github.com/Lorenzo-SF/arrea.git", override: true},
+      # Sibling deps as Hex requirements: apero / arrea are published
+      # on hex.pm before botica releases, so external consumers resolve
+      # everything from hex.
+      {:apero, "~> 4.0", override: true},
+      {:arrea, "~> 3.0", override: true},
       # Trebejo is private; CI for the public repos cannot access it.
       # Code uses Code.ensure_loaded?(Trebejo.…) guards to gracefully
       # degrade when absent. Skipped entirely from deps.
@@ -60,16 +58,41 @@ defmodule Botica.MixProject do
       source_ref: "2.1.0",
       extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"],
       groups_for_modules: [
-        Core: [Botica, Botica.Doctor, Botica.Types],
-        Flags: [Botica.Flags, Botica.Flags.Flag, Botica.Flags.Store],
-        Execution: [Botica.Runner.Executor, Botica.Runner.Sequencer],
+        Core: [
+          Botica,
+          Botica.Doctor,
+          Botica.Doctor.FlagsSummary,
+          Botica.Doctor.Reporter,
+          Botica.Types,
+          Botica.Report,
+          Botica.Validation
+        ],
+        Flags: [
+          Botica.Flags,
+          Botica.Flags.Flag,
+          Botica.Flags.Store,
+          Botica.Flags.Config,
+          Botica.Flags.Doc,
+          Botica.Flags.Persistence,
+          Botica.Flags.Persistence.Disk,
+          Botica.Flags.Persistence.Writer,
+          Botica.Flags.Rollout
+        ],
+        Execution: [
+          Botica.Runner.Executor,
+          Botica.Runner.Sequencer,
+          Botica.Runner.CheckRunner
+        ],
+        Runtime: [Botica.Alerts, Botica.Dashboard, Botica.Scheduler],
         Repair: [Botica.Repair.Fixer],
-        Checks: [Botica.Check.Result, Botica.Check.Behaviour],
+        Checks: [Botica.Check.Result, Botica.Check.Behaviour, Botica.Check.Group],
         Batteries: [
           Botica.Batteries.PostgreSQL,
           Botica.Batteries.Redis,
           Botica.Batteries.Memory,
-          Botica.Batteries.Disk
+          Botica.Batteries.Disk,
+          Botica.Batteries.LlamaServer,
+          Botica.Batteries.LlamaServer.Installer
         ]
       ]
     ]
