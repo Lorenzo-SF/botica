@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-18
+
 ### Fixed
 - **`Botica.Runner.Executor.execute_single_check/2`** — three real
   runtime bugs in the spawn/recv loop:
@@ -151,8 +153,10 @@ into this single canonical `2.0.0` entry.
 ### Added
 - Initial open source release: feature flags, task supervisor.
 
+[2.1.0]: https://hex.pm/packages/botica/2.1.0
 [2.0.0]: https://hex.pm/packages/botica/2.0.0
 [1.0.0]: https://hex.pm/packages/botica/1.0.0
+[Unreleased]: https://github.com/Lorenzo-SF/botica/compare/2.1.0...HEAD
 
 
 > ## A note on history
@@ -167,7 +171,7 @@ into this single canonical `2.0.0` entry.
 > not preserved is, by the maintainer's choice, no longer part of the
 > canonical development line.
 >
-> Tag `1.0.0` points to the initial open-source cut-over; tag
-> `2.0.0` points to the current HEAD and the canonical consolidated
-> release. All versioned artifacts on Hex.pm and GitHub Releases
+> Tag `1.0.0` points to the initial open-source cut-over; tags
+> `2.0.0` and `2.1.0` (current HEAD) point to their respective
+> releases. All versioned artifacts on Hex.pm and GitHub Releases
 > follow this convention.
