@@ -34,15 +34,15 @@ defmodule Botica.MixProject do
 
   defp deps do
     [
-      # Sibling deps as Hex requirements: apero / arrea are published
-      # on hex.pm before botica releases, so external consumers resolve
-      # everything from hex.
-      {:apero, "~> 4.0"},
-      {:arrea, "~> 3.0"},
-      # Trebejo is private; CI for the public repos cannot access it.
-      # Code uses Code.ensure_loaded?(Trebejo.…) guards to gracefully
-      # degrade when absent. Skipped entirely from deps.
-      # {:trebejo, git: "https://github.com/Lorenzo-SF/trebejo.git"},
+      # Sibling deps point straight at GitHub: no version bumps to track, no
+      # publish ordering between packages. `MIX_ENV=prod mix hex.publish`
+      # still works if a Hex release is ever needed again.
+      {:apero, github: "Lorenzo-SF/apero"},
+      {:arrea, github: "Lorenzo-SF/arrea"},
+      # Trebejo is optional and kept out of deps on purpose: code uses
+      # Code.ensure_loaded?(Trebejo.…) guards to degrade gracefully when it
+      # is absent, so botica still resolves and builds without it.
+      # {:trebejo, github: "Lorenzo-SF/trebejo", override: true},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
