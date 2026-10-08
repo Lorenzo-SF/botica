@@ -72,8 +72,7 @@ defmodule Botica.Flags.Persistence do
         {Botica.Flags.Persistence.Disk, []}
 
       opts when is_list(opts) ->
-        {Keyword.get(opts, :adapter, Botica.Flags.Persistence.Disk),
-         Keyword.get(opts, :opts, [])}
+        {Keyword.get(opts, :adapter, Botica.Flags.Persistence.Disk), Keyword.get(opts, :opts, [])}
 
       other ->
         raise ArgumentError,

@@ -4,7 +4,7 @@ defmodule Botica.MixProject do
   def project do
     [
       app: :botica,
-      version: "2.1.1",
+      version: "2.2.0",
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -34,15 +34,12 @@ defmodule Botica.MixProject do
 
   defp deps do
     [
-      # Sibling deps point straight at GitHub: no version bumps to track, no
-      # publish ordering between packages. `MIX_ENV=prod mix hex.publish`
-      # still works if a Hex release is ever needed again.
-      {:apero, github: "Lorenzo-SF/apero"},
-      {:arrea, github: "Lorenzo-SF/arrea"},
+      {:apero, "~> 4.0"},
+      {:arrea, "~> 3.1"},
       # Trebejo is optional and kept out of deps on purpose: code uses
       # Code.ensure_loaded?(Trebejo.…) guards to degrade gracefully when it
       # is absent, so botica still resolves and builds without it.
-      # {:trebejo, github: "Lorenzo-SF/trebejo", override: true},
+      # {:trebejo, "~> 2.1"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 1.0.0", only: [:dev, :test], runtime: false},
       {:excoveralls, "~> 0.18", only: :test},
@@ -55,7 +52,7 @@ defmodule Botica.MixProject do
       main: "readme",
       source_url: "https://github.com/Lorenzo-SF/botica",
       homepage_url: "https://github.com/Lorenzo-SF/botica",
-      source_ref: "2.1.1",
+      source_ref: "2.2.0",
       extras: ["README.md", "docs/README.es.md", "LICENSE.md", "CHANGELOG.md"],
       groups_for_modules: [
         Core: [

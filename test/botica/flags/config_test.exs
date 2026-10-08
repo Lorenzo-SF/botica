@@ -18,10 +18,10 @@ defmodule Botica.Flags.ConfigTest do
   end
 
   test "get/0 builds flags from keyword entries" do
-    Application.put_env(:botica, :flags, [
+    Application.put_env(:botica, :flags,
       foo: [default: true, description: "foo"],
       bar: []
-    ])
+    )
 
     flags = Config.get()
     assert length(flags) == 2

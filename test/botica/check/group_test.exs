@@ -12,7 +12,15 @@ defmodule Botica.Check.GroupTest do
   end
 
   defp slow_check(ms) do
-    %{id: :slow, name: "slow", priority: 1, check: fn -> Process.sleep(ms); {:ok, "slow done"} end}
+    %{
+      id: :slow,
+      name: "slow",
+      priority: 1,
+      check: fn ->
+        Process.sleep(ms)
+        {:ok, "slow done"}
+      end
+    }
   end
 
   test "new/3 sets defaults" do
