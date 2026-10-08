@@ -17,11 +17,17 @@ defmodule Botica.Flags.RolloutTest do
 
   describe "percentage rollout" do
     test "same user always gets the same answer (determinism)" do
-      Flags.define(:rollout_pct_deterministic, default: false, rollout: %{type: :percentage, value: 50})
+      Flags.define(:rollout_pct_deterministic,
+        default: false,
+        rollout: %{type: :percentage, value: 50}
+      )
+
       Flags.enable(:rollout_pct_deterministic)
 
       ctx = %{"user" => "user_123"}
-      assert Flags.enabled?(:rollout_pct_deterministic, ctx) == Flags.enabled?(:rollout_pct_deterministic, ctx)
+
+      assert Flags.enabled?(:rollout_pct_deterministic, ctx) ==
+               Flags.enabled?(:rollout_pct_deterministic, ctx)
     end
 
     test "percentage 0 gives nobody, percentage 100 gives everybody" do
@@ -43,7 +49,8 @@ defmodule Botica.Flags.RolloutTest do
 
       hits =
         for i <- 1..2000, reduce: 0 do
-          acc -> acc + if(Flags.enabled?(:rollout_pct_25, %{"user" => "user_#{i}"}), do: 1, else: 0)
+          acc ->
+            acc + if(Flags.enabled?(:rollout_pct_25, %{"user" => "user_#{i}"}), do: 1, else: 0)
         end
 
       assert hits > 400, "expected ~500 hits, got #{hits}"
@@ -59,7 +66,8 @@ defmodule Botica.Flags.RolloutTest do
 
   describe "user_list rollout" do
     test "users in the list get the feature, others do not" do
-      Flags.define(:rollout_userlist, default: false,
+      Flags.define(:rollout_userlist,
+        default: false,
         rollout: %{type: :user_list, users: ["lorenzo", "ana"]}
       )
 
@@ -71,7 +79,8 @@ defmodule Botica.Flags.RolloutTest do
     end
 
     test "user_list works with atom :user keys too" do
-      Flags.define(:rollout_userlist_atom, default: false,
+      Flags.define(:rollout_userlist_atom,
+        default: false,
         rollout: %{type: :user_list, users: ["lorenzo"]}
       )
 
@@ -82,7 +91,8 @@ defmodule Botica.Flags.RolloutTest do
 
   describe "attribute rollout" do
     test "context attribute matching values gets the feature" do
-      Flags.define(:rollout_attr, default: false,
+      Flags.define(:rollout_attr,
+        default: false,
         rollout: %{type: :attribute, key: "tenant", values: ["acme", "globex"]}
       )
 
@@ -94,7 +104,8 @@ defmodule Botica.Flags.RolloutTest do
     end
 
     test "attribute with no matching context key is disabled" do
-      Flags.define(:rollout_attr_nokey, default: false,
+      Flags.define(:rollout_attr_nokey,
+        default: false,
         rollout: %{type: :attribute, key: "tenant", values: ["acme"]}
       )
 
@@ -121,16 +132,22 @@ defmodule Botica.Flags.RolloutTest do
 
   describe "Flag.new/2 rollout normalization" do
     test "accepts map rollouts" do
-      assert %{type: :percentage, value: 25} = Flag.new(:m1, rollout: %{type: :percentage, value: 25}).rollout
-      assert %{type: :user_list, users: ["a"]} = Flag.new(:m2, rollout: %{type: :user_list, users: ["a"]}).rollout
+      assert %{type: :percentage, value: 25} =
+               Flag.new(:m1, rollout: %{type: :percentage, value: 25}).rollout
+
+      assert %{type: :user_list, users: ["a"]} =
+               Flag.new(:m2, rollout: %{type: :user_list, users: ["a"]}).rollout
 
       assert %{type: :attribute, key: "k", values: ["v"]} =
                Flag.new(:m3, rollout: %{type: :attribute, key: "k", values: ["v"]}).rollout
     end
 
     test "clamps percentage map values" do
-      assert %{type: :percentage, value: 100} = Flag.new(:m4, rollout: %{type: :percentage, value: 250}).rollout
-      assert %{type: :percentage, value: 0} = Flag.new(:m5, rollout: %{type: :percentage, value: -5}).rollout
+      assert %{type: :percentage, value: 100} =
+               Flag.new(:m4, rollout: %{type: :percentage, value: 250}).rollout
+
+      assert %{type: :percentage, value: 0} =
+               Flag.new(:m5, rollout: %{type: :percentage, value: -5}).rollout
     end
 
     test "invalid rollout definitions are ignored" do

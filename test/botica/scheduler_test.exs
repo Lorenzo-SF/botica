@@ -52,12 +52,15 @@ defmodule Botica.SchedulerTest do
     end
 
     test "rejects invalid runner" do
-      assert {:error, {:invalid_runner, _}} = Scheduler.add(:s_nofun, "not a function", every: {:seconds, 1})
+      assert {:error, {:invalid_runner, _}} =
+               Scheduler.add(:s_nofun, "not a function", every: {:seconds, 1})
     end
 
     test "rejects invalid every interval" do
       group = Group.new(:g4, [check(:c4)])
-      assert {:error, :invalid_interval} = Scheduler.add(:s_bad_interval, group, every: {:minutes, 0})
+
+      assert {:error, :invalid_interval} =
+               Scheduler.add(:s_bad_interval, group, every: {:minutes, 0})
     end
   end
 

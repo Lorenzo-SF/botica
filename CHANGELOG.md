@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-08
+
+### Fixed
+
+- **Every battery reported `trebejo not loaded` instead of doing its
+  job.** `Disk`, `Memory`, `PostgreSQL` and `Redis` each carried
+  their own copy of a `safe_run_cmd_legacy/3` wrapper that shelled
+  out via `Trebejo.Util.run_cmd_legacy/3` when that module was
+  loaded and otherwise returned the literal placeholder
+  `{"trebejo not loaded", 127}`. `trebejo` is deliberately *not*
+  in `deps` (botica has to resolve and build without it), so the
+  guard was always false and the graceful-degradation path was the
+  only path — a health check reporting "trebejo not loaded" instead
+  of disk usage, memory pressure, or whether postgres and redis
+  are actually up.
+
+  New `Botica.Batteries.Command.run/3` keeps the Trebejo branch for
+  anyone who does have it loaded and falls back to `System.cmd/3`
+  otherwise, so a battery always returns a real reading. The four
+  duplicated private wrappers now delegate to it.
+
+  The fallback also handles the two things `System.cmd/3` does not
+  do that `Trebejo.Util.run_cmd_legacy/3` did: it has no `:timeout`
+  option (the call is wrapped in a task so `sudo systemctl` cannot
+  block on a password prompt forever, yielding `124` on expiry),
+  and it raises when the binary is not on `PATH` (mapped to `127`,
+  the shell's "command not found", so the existing exit-code
+  classification keeps working).
+
+  Two long-failing tests in `test/botica/batteries_test.exs` —
+  `Disk.check_disk/3` and `Memory.check_memory/2` "result message
+  includes % used" — had been red since the batteries were
+  introduced, because they assert on the real reading rather than
+  on the placeholder.
+
+### Changed
+
+- **Sibling deps resolved from Hex at their latest releases**:
+  `apero` is now `{:apero, "~> 4.0"}` and `arrea` is
+  `{:arrea, "~> 3.1"}` (was `github: "Lorenzo-SF/apero"` /
+  `github: "Lorenzo-SF/arrea"`). This reverts the GitHub-pinning
+  introduced in `b3bd2bb` and puts the published package back on
+  the registry, so consumers of `botica` get the released lines
+  instead of tracking sibling `main` branches. `mix.lock` now
+  resolves `apero 4.1.0`, `arrea 3.1.0` and transitively
+  `alaja 3.2.0`, `batamanta 3.1.0`, `pote 3.0.0` from Hex.
+- **`trebejo` stays out of `deps`** on purpose — the code uses
+  `Code.ensure_loaded?(Trebejo.…)` guards to degrade gracefully
+  when it is absent, so `botica` resolves and builds without it.
+  The commented-out line is refreshed to `{:trebejo, "~> 2.1"}`
+  for whoever re-enables it.
+- **`source_ref`** aligned to `2.2.0` (was `2.1.1`).
+- **`mix format`** ran repo-wide, adding the missing trailing
+  newline to 14 files that `mix format --check-formatted` was
+  already rejecting.
+
 ## [2.1.1] - 2026-09-18
 
 > Note: `2.1.0` was published on hex.pm from pre-release state and
@@ -161,8 +217,9 @@ into this single canonical `2.0.0` entry.
 [2.1.1]: https://hex.pm/packages/botica/2.1.1
 [2.1.0]: https://hex.pm/packages/botica/2.1.0
 [2.0.0]: https://hex.pm/packages/botica/2.0.0
+[2.2.0]: https://github.com/Lorenzo-SF/botica/compare/2.1.1...2.2.0
 [1.0.0]: https://hex.pm/packages/botica/1.0.0
-[Unreleased]: https://github.com/Lorenzo-SF/botica/compare/2.1.1...HEAD
+[Unreleased]: https://github.com/Lorenzo-SF/botica/compare/2.2.0...HEAD
 
 
 > ## A note on history

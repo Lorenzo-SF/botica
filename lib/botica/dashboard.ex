@@ -83,7 +83,13 @@ defmodule Botica.Dashboard do
     provider = Keyword.get(opts, :provider, fn -> [] end)
     interface = Keyword.get(opts, :interface, {127, 0, 0, 1})
 
-    case :gen_tcp.listen(port, [:binary, packet: :raw, active: false, reuseaddr: true, ip: interface]) do
+    case :gen_tcp.listen(port, [
+           :binary,
+           packet: :raw,
+           active: false,
+           reuseaddr: true,
+           ip: interface
+         ]) do
       {:ok, listen_socket} ->
         {:ok, {actual_port, _}} = :inet.sockname(listen_socket)
 
