@@ -43,7 +43,19 @@ defmodule Botica.Batteries.LlamaServer do
 
   require Logger
 
+  alias Apero.Http
   alias Apero.Proc
+  alias Arrea.LongRunning
+  alias Botica.Batteries.LlamaServer.Installer
+
+  # Per-role identifier atoms. `@type role` is closed (`:chat | :embedding`),
+  # so these are known at compile time and written as literals: building them
+  # with interpolation (`:"#{role}_server"`) would call `binary_to_atom/2` and
+  # grow the atom table at runtime. These maps make the lookup a plain
+  # `Map.fetch!/2`.
+  @server_id_by_role %{chat: :chat_server, embedding: :embedding_server}
+  @arrea_server_id_by_role %{chat: :delfos_chat_server, embedding: :delfos_embedding_server}
+  @check_id_by_role %{chat: :llama_server_chat, embedding: :llama_server_embedding}
 
   # Defaults per role. Keys mirror the args literally — they're
   # transformed into CLI args by `build_args/2`. The `n_gpu_layers`
@@ -153,9 +165,8 @@ defmodule Botica.Batteries.LlamaServer do
   end
 
   defp download_or_error(opts) do
-    if Keyword.get(opts, :force_download, false) or
-         Botica.Batteries.LlamaServer.Installer.not_installed?() do
-      Botica.Batteries.LlamaServer.Installer.install()
+    if Keyword.get(opts, :force_download, false) or Installer.not_installed?() do
+      Installer.install()
     else
       {:error, :no_llama_server}
     end
@@ -185,73 +196,91 @@ defmodule Botica.Batteries.LlamaServer do
       |> Map.merge(config)
       |> maybe_apply_device(Map.get(config, :hardware_plan))
 
-    _ =
-      if not Map.has_key?(merged, :gguf_path) do
-        raise ArgumentError, "Botica build_args config must include :gguf_path"
-      end
+    unless Map.has_key?(merged, :gguf_path) do
+      raise ArgumentError, "Botica build_args config must include :gguf_path"
+    end
 
-    _base =
-      [
-        "--model",
-        Map.fetch!(merged, :gguf_path),
-        "--host",
-        Map.get(merged, :host, "127.0.0.1"),
-        "--port",
-        to_string(Map.fetch!(merged, :port)),
-        "--api-key",
-        Map.get(merged, :api_key, "sk-local-dev-key"),
-        "--alias",
-        Map.get(merged, :alias, "default"),
-        "--ctx-size",
-        to_string(merged[:ctx_size] || 8192),
-        "--n-gpu-layers",
-        to_string(Map.get(merged, :n_gpu_layers, 0)),
-        "--cache-type-k",
-        to_string(merged[:cache_type_k] || "q8_0"),
-        "--cache-type-v",
-        to_string(merged[:cache_type_v] || "q8_0"),
-        "--batch-size",
-        to_string(merged[:batch_size] || 1024),
-        "--ubatch-size",
-        to_string(merged[:ubatch_size] || 1024),
-        "--parallel",
-        to_string(merged[:parallel] || 1),
-        "--threads",
-        to_string(merged[:threads] || 12),
-        "--threads-batch",
-        to_string(merged[:threads_batch] || 24)
-      ] ++
-        role_specific_args(role, merged) ++
-        boolean_flag("--cont-batching", merged[:cont_batching]) ++
-        boolean_flag("--cache-prompt", merged[:cache_prompt]) ++
-        boolean_flag("--kv-unified", merged[:kv_unified]) ++
-        boolean_flag("--jinja", merged[:jinja]) ++
-        boolean_flag("--metrics", merged[:metrics]) ++
-        load_mode_flag(merged[:no_mmap]) ++
-        optional_flag("--flash-attn", merged[:flash_attn]) ++
-        optional_flag("--slot-save-path", merged[:slot_save_path]) ++
-        optional_flag("--reasoning-format", merged[:reasoning_format]) ++
-        optional_flag("--temp", merged[:temp], &Float.to_string/1) ++
-        optional_flag("--top-p", merged[:top_p], &Float.to_string/1) ++
-        optional_flag("--top-k", merged[:top_k]) ++
-        optional_flag("--keep", merged[:keep]) ++
-        optional_flag("--n-predict", merged[:n_predict]) ++
-        optional_flag("--prio", merged[:prio]) ++
-        optional_flag("--slot-prompt-similarity", merged[:slot_prompt_similarity]) ++
-        optional_flag("--spec-type", merged[:spec_type]) ++
-        optional_flag("--spec-ngram-mod-n-min", merged[:spec_ngram_mod_n_min]) ++
-        optional_flag("--spec-ngram-mod-n-max", merged[:spec_ngram_mod_n_max]) ++
-        optional_flag("--spec-ngram-mod-n-match", merged[:spec_ngram_mod_n_match]) ++
-        optional_flag("--embedding", merged[:embedding]) ++
-        optional_flag("--pooling", merged[:pooling]) ++
-        optional_flag("--embd-normalize", merged[:embd_normalize]) ++
-        optional_flag("--device", merged[:device]) ++
-        boolean_flag("--no-kv-offload", merged[:no_kv_offload]) ++
-        boolean_flag("--no-op-offload", merged[:no_op_offload]) ++
-        boolean_flag("--no-host", merged[:no_host]) ++
-        boolean_flag("--no-mmproj-offload", merged[:no_mmproj_offload]) ++
-        optional_flag("--fit", merged[:fit]) ++
-        (config[:extra_args] || [])
+    core_args(merged) ++
+      memory_args(merged) ++
+      perf_args(merged) ++
+      role_specific_args(role, merged) ++
+      tuning_args(merged) ++
+      (config[:extra_args] || [])
+  end
+
+  defp core_args(merged) do
+    [
+      "--model",
+      Map.fetch!(merged, :gguf_path),
+      "--host",
+      Map.get(merged, :host, "127.0.0.1"),
+      "--port",
+      to_string(Map.fetch!(merged, :port)),
+      "--api-key",
+      Map.get(merged, :api_key, "sk-local-dev-key"),
+      "--alias",
+      Map.get(merged, :alias, "default")
+    ]
+  end
+
+  defp memory_args(merged) do
+    [
+      "--ctx-size",
+      to_string(merged[:ctx_size] || 8192),
+      "--n-gpu-layers",
+      to_string(Map.get(merged, :n_gpu_layers, 0)),
+      "--cache-type-k",
+      to_string(merged[:cache_type_k] || "q8_0"),
+      "--cache-type-v",
+      to_string(merged[:cache_type_v] || "q8_0"),
+      "--batch-size",
+      to_string(merged[:batch_size] || 1024),
+      "--ubatch-size",
+      to_string(merged[:ubatch_size] || 1024)
+    ]
+  end
+
+  defp perf_args(merged) do
+    [
+      "--parallel",
+      to_string(merged[:parallel] || 1),
+      "--threads",
+      to_string(merged[:threads] || 12),
+      "--threads-batch",
+      to_string(merged[:threads_batch] || 24)
+    ]
+  end
+
+  defp tuning_args(merged) do
+    boolean_flag("--cont-batching", merged[:cont_batching]) ++
+      boolean_flag("--cache-prompt", merged[:cache_prompt]) ++
+      boolean_flag("--kv-unified", merged[:kv_unified]) ++
+      boolean_flag("--jinja", merged[:jinja]) ++
+      boolean_flag("--metrics", merged[:metrics]) ++
+      load_mode_flag(merged[:no_mmap]) ++
+      optional_flag("--flash-attn", merged[:flash_attn]) ++
+      optional_flag("--slot-save-path", merged[:slot_save_path]) ++
+      optional_flag("--reasoning-format", merged[:reasoning_format]) ++
+      optional_flag("--temp", merged[:temp], &Float.to_string/1) ++
+      optional_flag("--top-p", merged[:top_p], &Float.to_string/1) ++
+      optional_flag("--top-k", merged[:top_k]) ++
+      optional_flag("--keep", merged[:keep]) ++
+      optional_flag("--n-predict", merged[:n_predict]) ++
+      optional_flag("--prio", merged[:prio]) ++
+      optional_flag("--slot-prompt-similarity", merged[:slot_prompt_similarity]) ++
+      optional_flag("--spec-type", merged[:spec_type]) ++
+      optional_flag("--spec-ngram-mod-n-min", merged[:spec_ngram_mod_n_min]) ++
+      optional_flag("--spec-ngram-mod-n-max", merged[:spec_ngram_mod_n_max]) ++
+      optional_flag("--spec-ngram-mod-n-match", merged[:spec_ngram_mod_n_match]) ++
+      optional_flag("--embedding", merged[:embedding]) ++
+      optional_flag("--pooling", merged[:pooling]) ++
+      optional_flag("--embd-normalize", merged[:embd_normalize]) ++
+      optional_flag("--device", merged[:device]) ++
+      boolean_flag("--no-kv-offload", merged[:no_kv_offload]) ++
+      boolean_flag("--no-op-offload", merged[:no_op_offload]) ++
+      boolean_flag("--no-host", merged[:no_host]) ++
+      boolean_flag("--no-mmproj-offload", merged[:no_mmproj_offload]) ++
+      optional_flag("--fit", merged[:fit])
   end
 
   defp role_specific_args(:chat, _merged), do: []
@@ -318,10 +347,10 @@ defmodule Botica.Batteries.LlamaServer do
     port = config[:port]
     health = Keyword.get(opts, :health_check, &default_health/1)
     force = Keyword.get(opts, :force, false)
-    id = Keyword.get(opts, :id, :"#{role}_server")
-    server_id = Keyword.get(opts, :server_id, :"delfos_#{role}_server")
+    id = Keyword.get(opts, :id, Map.fetch!(@server_id_by_role, role))
+    server_id = Keyword.get(opts, :server_id, Map.fetch!(@arrea_server_id_by_role, role))
 
-    if force, do: Arrea.LongRunning.stop(server_id)
+    if force, do: LongRunning.stop(server_id)
 
     if running?(port) do
       :already_running
@@ -340,7 +369,7 @@ defmodule Botica.Batteries.LlamaServer do
         args = build_args(role, config)
         wait_timeout = Keyword.get(opts, :wait_timeout, 30_000)
 
-        case Arrea.LongRunning.start_link(
+        case LongRunning.start_link(
                id: server_id,
                binary: binary,
                args: args,
@@ -348,19 +377,23 @@ defmodule Botica.Batteries.LlamaServer do
                stop_grace: 5_000,
                name: id
              ) do
-          {:ok, _pid} ->
-            case wait_until_ready(config[:port], wait_timeout) do
-              :ok ->
-                device = device_of(config)
-                if device == :cpu, do: {:ok, :started_cpu}, else: {:ok, :started}
-
-              {:error, _} = err ->
-                err
-            end
-
-          {:error, reason} ->
-            {:error, reason}
+          {:ok, _pid} -> await_ready(config, wait_timeout)
+          {:error, reason} -> {:error, reason}
         end
+
+      {:error, _} = err ->
+        err
+    end
+  end
+
+  # Once the process link is up, poll `/health` until the server answers or
+  # the timeout elapses. The device decides the success marker only after
+  # readiness is confirmed.
+  defp await_ready(config, wait_timeout) do
+    case wait_until_ready(config[:port], wait_timeout) do
+      :ok ->
+        device = device_of(config)
+        if device == :cpu, do: {:ok, :started_cpu}, else: {:ok, :started}
 
       {:error, _} = err ->
         err
@@ -373,7 +406,7 @@ defmodule Botica.Batteries.LlamaServer do
   @spec stop(keyword()) :: :ok
   def stop(opts \\ []) do
     server_id = Keyword.get(opts, :server_id, :llama_server_default)
-    Arrea.LongRunning.stop(server_id)
+    LongRunning.stop(server_id)
     :ok
   end
 
@@ -387,7 +420,7 @@ defmodule Botica.Batteries.LlamaServer do
   """
   @spec running?(pos_integer()) :: boolean()
   def running?(port) when is_integer(port) do
-    case Apero.Http.get("http://127.0.0.1:#{port}/health", [], receive_timeout: 1_000) do
+    case Http.get("http://127.0.0.1:#{port}/health", [], receive_timeout: 1_000) do
       {:ok, %{status: status}} when status in 200..299 -> true
       _ -> false
     end
@@ -448,7 +481,7 @@ defmodule Botica.Batteries.LlamaServer do
   @spec check(role(), config()) :: Botica.Check.Behaviour.spec()
   def check(role, config) do
     %{
-      id: String.to_atom("llama_server_#{role}"),
+      id: Map.fetch!(@check_id_by_role, role),
       name: "llama-server (#{role})",
       description: "Chat completion / embedding server (port #{config[:port]})",
       priority: 1,

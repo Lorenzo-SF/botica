@@ -1,5 +1,6 @@
 defmodule Botica.Batteries.Memory do
   alias Apero.OS
+  alias Botica.Batteries.Command
 
   @moduledoc """
   Predefined health check for system memory usage.
@@ -175,6 +176,6 @@ defmodule Botica.Batteries.Memory do
   # Safe wrapper for the optional Trebejo dep — returns a graceful
   # fallback when the lib is absent (e.g. CI without private-repo access).
   defp safe_run_cmd_legacy(cmd, args, opts) do
-    Botica.Batteries.Command.run(cmd, args, opts)
+    Command.run(cmd, args, opts)
   end
 end

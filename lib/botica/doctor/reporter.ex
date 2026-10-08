@@ -8,6 +8,8 @@ defmodule Botica.Doctor.Reporter do
   Not part of the public API — used only by `Botica.Doctor`.
   """
 
+  alias Botica.Check.Result
+
   @doc """
   Aggregates check results into a summary map.
 
@@ -21,7 +23,7 @@ defmodule Botica.Doctor.Reporter do
           passed?: boolean()
         }
   def summary(results) do
-    Botica.Check.Result.summarize(results)
+    Result.summarize(results)
   end
 
   @doc """

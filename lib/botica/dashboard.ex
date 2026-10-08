@@ -181,13 +181,11 @@ defmodule Botica.Dashboard do
     summary = Report.summary(results)
 
     rows =
-      results
-      |> Enum.map(fn result ->
+      Enum.map_join(results, "\n", fn result ->
         ~s(<tr><td>#{escape_html(to_string(result.id))}</td>) <>
           ~s(<td>#{escape_html(result.status)}</td>) <>
           ~s(<td>#{escape_html(result.message || "")}</td></tr>)
       end)
-      |> Enum.join("\n")
 
     body = """
     <!DOCTYPE html>
