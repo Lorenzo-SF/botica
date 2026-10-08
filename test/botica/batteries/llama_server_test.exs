@@ -13,6 +13,7 @@ defmodule Botica.Batteries.LlamaServerTest do
   use ExUnit.Case, async: true
 
   alias Botica.Batteries.LlamaServer, as: LS
+  alias Botica.Batteries.LlamaServer.Installer
 
   describe "build_args/2 — chat role" do
     test "produces all the canonical flags for a chat model" do
@@ -238,7 +239,7 @@ defmodule Botica.Batteries.LlamaServerTest do
     test "precompiled_url returns nil for unsupported platforms" do
       # The covered branches in CI may vary. Just verify the helper
       # doesn't crash and returns a string-or-nil.
-      result = LS.Installer.install()
+      result = Installer.install()
       # In CI we may have no network access or the upstream URL may 404;
       # accept either success or any error rather than failing the suite.
       assert result in [:already_installed, :downloaded] or match?({:error, _}, result)
@@ -249,7 +250,7 @@ defmodule Botica.Batteries.LlamaServerTest do
       System.put_env("LLAMA_INSTALL_DIR", "/tmp/delfos-llama-test")
 
       try do
-        assert LS.Installer.install_dir() == "/tmp/delfos-llama-test"
+        assert Installer.install_dir() == "/tmp/delfos-llama-test"
       after
         if original,
           do: System.put_env("LLAMA_INSTALL_DIR", original),

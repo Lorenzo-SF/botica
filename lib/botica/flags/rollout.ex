@@ -53,12 +53,21 @@ defmodule Botica.Flags.Rollout do
         entity_for(context) in users
 
       %{type: :attribute, key: key, values: values} ->
-        context_value = context[key] || context[String.to_atom(key)]
+        context_value = context[key] || context[existing_atom(key)]
         context_value in values
 
       _other ->
         false
     end
+  end
+
+  # `key` viene de la definición del flag (no de una llamada del usuario), y
+  # si el atom no existe es que no puede estar en el mapa: `nil` como clave
+  # devuelve `nil`, así que el comportamiento es idéntico sin crear atoms.
+  defp existing_atom(key) do
+    String.to_existing_atom(key)
+  rescue
+    ArgumentError -> nil
   end
 
   # The entity used for bucketing / lists: the `"user"` context key when
