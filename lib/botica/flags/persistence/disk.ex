@@ -133,10 +133,17 @@ defmodule Botica.Flags.Persistence.Disk do
 
   defp rollout_from_json(%{"type" => type} = rollout) when is_binary(type) do
     case type do
-      "percentage" -> %{type: :percentage, value: Map.get(rollout, "value", 0)}
-      "user_list" -> %{type: :user_list, users: Map.get(rollout, "users", [])}
-      "attribute" -> %{type: :attribute, key: Map.get(rollout, "key"), values: Map.get(rollout, "values", [])}
-      _ -> raise(ArgumentError, "unknown rollout type: #{type}")
+      "percentage" ->
+        %{type: :percentage, value: Map.get(rollout, "value", 0)}
+
+      "user_list" ->
+        %{type: :user_list, users: Map.get(rollout, "users", [])}
+
+      "attribute" ->
+        %{type: :attribute, key: Map.get(rollout, "key"), values: Map.get(rollout, "values", [])}
+
+      _ ->
+        raise(ArgumentError, "unknown rollout type: #{type}")
     end
   end
 
@@ -175,8 +182,11 @@ defmodule Botica.Flags.Persistence.Disk do
   defp rollout_to_json(nil), do: nil
   defp rollout_to_json(pct) when is_integer(pct), do: pct
 
-  defp rollout_to_json(%{type: :percentage, value: value}), do: %{"type" => "percentage", "value" => value}
-  defp rollout_to_json(%{type: :user_list, users: users}), do: %{"type" => "user_list", "users" => users}
+  defp rollout_to_json(%{type: :percentage, value: value}),
+    do: %{"type" => "percentage", "value" => value}
+
+  defp rollout_to_json(%{type: :user_list, users: users}),
+    do: %{"type" => "user_list", "users" => users}
 
   defp rollout_to_json(%{type: :attribute, key: key, values: values}),
     do: %{"type" => "attribute", "key" => key, "values" => values}

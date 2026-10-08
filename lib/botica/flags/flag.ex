@@ -112,13 +112,15 @@ defmodule Botica.Flags.Flag do
     0
   end
 
-  defp normalize_rollout(%{type: :percentage, value: value}) when is_integer(value) and value > 100 do
+  defp normalize_rollout(%{type: :percentage, value: value})
+       when is_integer(value) and value > 100 do
     require Logger
     Logger.warning("[Botica.Flags] rollout percentage #{value} > 100, clamped to 100")
     %{type: :percentage, value: 100}
   end
 
-  defp normalize_rollout(%{type: :percentage, value: value}) when is_integer(value) and value < 0 do
+  defp normalize_rollout(%{type: :percentage, value: value})
+       when is_integer(value) and value < 0 do
     require Logger
     Logger.warning("[Botica.Flags] rollout percentage #{value} < 0, clamped to 0")
     %{type: :percentage, value: 0}

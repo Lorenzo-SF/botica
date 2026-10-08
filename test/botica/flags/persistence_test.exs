@@ -16,7 +16,9 @@ defmodule Botica.Flags.PersistenceTest do
 
   setup do
     # Isolate from the user's real flags file and from other tests.
-    tmp_dir = Path.join(System.tmp_dir!(), "botica_flags_test_#{System.unique_integer([:positive])}")
+    tmp_dir =
+      Path.join(System.tmp_dir!(), "botica_flags_test_#{System.unique_integer([:positive])}")
+
     File.mkdir_p!(tmp_dir)
     path = Path.join(tmp_dir, "flags.json")
 
@@ -52,7 +54,9 @@ defmodule Botica.Flags.PersistenceTest do
     end
 
     test "save_flag/1 round-trips percentage rollout maps", %{path: path} do
-      flag = Flag.new(:persist_rollout_pct, default: false, rollout: %{type: :percentage, value: 25})
+      flag =
+        Flag.new(:persist_rollout_pct, default: false, rollout: %{type: :percentage, value: 25})
+
       :ok = Disk.save_flag(flag)
 
       assert {:ok, [loaded]} = Disk.load_all()
@@ -60,8 +64,17 @@ defmodule Botica.Flags.PersistenceTest do
     end
 
     test "save_flag/1 round-trips user_list and attribute rollouts", %{path: path} do
-      user_flag = Flag.new(:persist_users, default: false, rollout: %{type: :user_list, users: ["lorenzo", "ana"]})
-      attr_flag = Flag.new(:persist_attr, default: false, rollout: %{type: :attribute, key: "tenant", values: ["acme"]})
+      user_flag =
+        Flag.new(:persist_users,
+          default: false,
+          rollout: %{type: :user_list, users: ["lorenzo", "ana"]}
+        )
+
+      attr_flag =
+        Flag.new(:persist_attr,
+          default: false,
+          rollout: %{type: :attribute, key: "tenant", values: ["acme"]}
+        )
 
       :ok = Disk.save_flag(user_flag)
       :ok = Disk.save_flag(attr_flag)
@@ -148,9 +161,7 @@ defmodule Botica.Flags.PersistenceTest do
       persisted = Flag.new(:persist_defaults_win, default: true, enabled: true)
       :ok = Disk.save_flag(persisted)
 
-      Application.put_env(:botica, :flags, [
-        persist_defaults_win: [default: false]
-      ])
+      Application.put_env(:botica, :flags, persist_defaults_win: [default: false])
 
       on_exit(fn -> Application.delete_env(:botica, :flags) end)
 
