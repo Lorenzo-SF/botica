@@ -30,6 +30,7 @@ defmodule Botica.Flags.Store do
   use GenServer
 
   alias Botica.Flags.{Config, Flag, Persistence}
+  alias Botica.Flags.Persistence.Writer
 
   @table :botica_flags
   # ---------------------------------------------------------------------------
@@ -158,7 +159,7 @@ defmodule Botica.Flags.Store do
     # failures are logged, not raised: the in-memory registry stays
     # authoritative for the current run.
     if Persistence.enabled?() do
-      Persistence.Writer.save(fresh)
+      Writer.save(fresh)
     end
 
     # Fire-and-forget telemetry: a slow listener must never block the
@@ -178,7 +179,7 @@ defmodule Botica.Flags.Store do
 
     # Persist the removal — see `:put` handler for rationale.
     if Persistence.enabled?() do
-      Persistence.Writer.delete(name)
+      Writer.delete(name)
     end
 
     # Fire-and-forget telemetry — see `:put` handler for rationale.
@@ -208,19 +209,22 @@ defmodule Botica.Flags.Store do
   defp load_persisted do
     if Persistence.enabled?() do
       {adapter, _opts} = Persistence.configured()
+      load_all(adapter)
+    end
+  end
 
-      case adapter.load_all() do
-        {:ok, flags} when is_list(flags) ->
-          Enum.each(flags, fn %Flag{} = flag -> :ets.insert(@table, {flag.name, flag}) end)
+  defp load_all(adapter) do
+    require Logger
 
-        {:error, reason} ->
-          require Logger
-          Logger.warning("[Botica.Flags] persistence load failed: #{inspect(reason)}")
+    case adapter.load_all() do
+      {:ok, flags} when is_list(flags) ->
+        Enum.each(flags, fn %Flag{} = flag -> :ets.insert(@table, {flag.name, flag}) end)
 
-        other ->
-          require Logger
-          Logger.warning("[Botica.Flags] unexpected persistence load result: #{inspect(other)}")
-      end
+      {:error, reason} ->
+        Logger.warning("[Botica.Flags] persistence load failed: #{inspect(reason)}")
+
+      other ->
+        Logger.warning("[Botica.Flags] unexpected persistence load result: #{inspect(other)}")
     end
   end
 end

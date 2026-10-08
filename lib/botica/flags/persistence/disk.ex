@@ -96,12 +96,8 @@ defmodule Botica.Flags.Persistence.Disk do
   defp decode(contents) do
     case Jason.decode(contents) do
       {:ok, json} when is_map(json) ->
-        flags =
-          json
-          |> Enum.map(fn {name, data} -> {String.to_atom(name), flag_from_json(name, data)} end)
-          |> Map.new()
-
-        {:ok, Map.values(flags)}
+        flags = Enum.map(json, fn {name, data} -> flag_from_json(name, data) end)
+        {:ok, flags}
 
       {:ok, _other} ->
         {:error, {:malformed, "flags file root must be a JSON object"}}
@@ -115,6 +111,11 @@ defmodule Botica.Flags.Persistence.Disk do
 
   defp flag_from_json(name, data) when is_map(data) do
     %Flag{
+      # `name` viene de un archivo de flags escrito por la propia librería. La atom
+      # table no sobrevive a un reinicio de la VM, así que `to_existing_atom/1`
+      # fallaría en el arranque en frío para cualquier flag nuevo. El nombre debe
+      # seguir siendo un átomo: `Flag.name` es `atom()` en toda la API pública.
+      # credo:disable-for-next-line Credo.Check.Warning.UnsafeToAtom
       name: String.to_atom(name),
       enabled: Map.get(data, "enabled", false),
       default: Map.get(data, "default", false),

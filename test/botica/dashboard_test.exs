@@ -57,7 +57,7 @@ defmodule Botica.DashboardTest do
 
   test "health is 200 when all checks pass" do
     port = 45_000 + :rand.uniform(5_000)
-    name = :"dashboard_ok_#{System.unique_integer([:positive])}"
+    name = {:global, {:dashboard_ok, System.unique_integer([:positive])}}
     ok_results = [%{id: :db, name: "DB", status: :ok, message: "up", fix_command: nil}]
 
     child_spec = %{

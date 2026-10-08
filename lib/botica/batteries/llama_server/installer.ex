@@ -45,18 +45,16 @@ defmodule Botica.Batteries.LlamaServer.Installer do
     dir = install_dir()
     File.mkdir_p!(dir)
 
-    cond do
-      File.exists?(binary_path()) and not Keyword.get(opts, :force, false) ->
-        :already_installed
+    if File.exists?(binary_path()) and not Keyword.get(opts, :force, false) do
+      :already_installed
+    else
+      url = precompiled_url()
 
-      true ->
-        url = precompiled_url()
-
-        if is_nil(url) do
-          {:error, :unsupported_platform}
-        else
-          do_download_and_unzip(url, dir)
-        end
+      if is_nil(url) do
+        {:error, :unsupported_platform}
+      else
+        do_download_and_unzip(url, dir)
+      end
     end
   end
 

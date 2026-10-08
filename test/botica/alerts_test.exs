@@ -59,7 +59,7 @@ defmodule Botica.AlertsTest do
 
     test "threshold is configurable via start options" do
       # Second tracker with threshold 1 under a custom name.
-      name = :"alerts_t1_#{System.unique_integer([:positive])}"
+      name = {:global, {:alerts_t1, System.unique_integer([:positive])}}
 
       child = %{
         id: name,

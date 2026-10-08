@@ -28,6 +28,8 @@ defmodule Botica.Batteries.Disk do
 
   @behaviour Botica.Check.Behaviour
 
+  alias Botica.Batteries.Command
+
   @impl true
   def check_def(opts \\ []) do
     path = Keyword.get(opts, :path, "/")
@@ -123,6 +125,6 @@ defmodule Botica.Batteries.Disk do
   # Safe wrapper for the optional Trebejo dep — returns a graceful
   # fallback when the lib is absent (e.g. CI without private-repo access).
   defp safe_run_cmd_legacy(cmd, args, opts) do
-    Botica.Batteries.Command.run(cmd, args, opts)
+    Command.run(cmd, args, opts)
   end
 end
