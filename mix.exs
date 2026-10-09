@@ -106,7 +106,23 @@ defmodule Botica.MixProject do
 
   defp aliases do
     [
-      "botica:config": ["run -e 'Botica.Flags.Doc.generate()'"]
+      gen: ["clean_build", "deps.get", "compile"],
+      clean_build: &clean_build/1,
+      "botica:config": ["run -e 'Botica.Flags.Doc.generate()'"],
+      qa: [
+        "format --check-formatted",
+        "compile --warnings-as-errors --force",
+        "credo --strict",
+        "cmd sh -c 'MIX_ENV=test mix test --cover'",
+        "dialyzer"
+      ]
     ]
+  end
+
+  defp clean_build(_args) do
+    File.rm_rf("_build")
+    File.rm_rf("deps")
+    File.rm_rf("mix.lock")
+    Mix.shell().info("✅  Clean slate.")
   end
 end
