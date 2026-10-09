@@ -1,33 +1,35 @@
 #!/usr/bin/env bash
-# :: botica.d/botica.sh — instalador y verificador de botica (librería)
+# :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: ::
+# ::  botica — instalador y verificador del CLI Elixir (escript)
 # ::
-# :: Contrato de zaguan: --install / --check / --help.
+# ::  Contrato de lasaca:
+# ::    botica.sh --install   compila/empaqueta (MIX_ENV=prod mix gen) y enlaza
+# ::    botica.sh --check     verifica sin reinstalar
+# ::    botica.sh --help      esta ayuda
 # ::
-# ::   bash botica.d/botica.sh --install   deps.get + compile
-# ::   bash botica.d/botica.sh --check     verifica que compila
-# ::   bash botica.d/botica.sh --help      esta ayuda
-# ::
-# :: botica es una LIBRERÍA: no tiene ejecutable ni se enlaza en ~/.local/bin.
-# :: Lo que se instala aquí es el código compilado dentro del repo, para que los
-# :: proyectos que dependen de él lo encuentren.
-# ::
-# :: Códigos de salida: 0 ok · 1 fallo · 2 opción desconocida · 3 falta herramienta
-# ::
-# :: Este script NO instala Erlang ni Elixir: comprueba que estén y, si faltan,
-# :: dice qué ejecutar. Instalar un toolchain desde el script de otra tool es la
-# :: forma de que nadie entienda por qué su máquina ha cambiado.
-
+# ::  botica es un ESCRIPT Elixir (mix.exs: `escript: [main_module: botica]`), NO un
+# ::  daemon. Aquí no hay --start/--daemon/--stop, ni launchd/plist, ni release
+# ::  de Phoenix. Este script sólo: (1) exige que `mix` exista y arranque,
+# ::  (2) ejecuta `mix gen` para limpiar/traer deps/compilar/empaquetar, y
+# ::  (3) deja un symlink `botica` en ~/.local/bin (o $botica_BIN_DIR).
+# :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: :: ::
 set -uo pipefail
 
-# -----------------------------------------------------------------------------
+# No colgarse pidiendo credenciales por terminal.
+#
+# `mix gen` encadena `deps.get`, y las dependencias propias (alaja, botica,
+# apero, de Lorenzo-SF/*) son repos PRIVADOS. Si git intentara preguntar
+# usuario/contraseña (o confirmar la clave del host) se quedaría esperando para
+# siempre. Con esto el fallo es inmediato y se reporta (ver hint en do_install).
+export GIT_TERMINAL_PROMPT=0
+export GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=10"
+
 # Resolver el path REAL de este script, atravesando symlinks.
 #
-# No es un detalle: si este .sh se acaba enlazando desde ~/.local/bin, `dirname`
-# daría ~/.local/bin y REPO saldría como ~/.local. Que es exactamente el fallo
-# que no se diagnostica: el error dice "no hay mix.exs en /Users/tu/.local".
-#
-# `readlink -f` no es portable (BSD no lo tiene). Un bucle de `readlink` sí.
-# -----------------------------------------------------------------------------
+# No es un detalle: el script se invoca como ~/.local/bin/botica, que es un
+# symlink a él. Sin resolver, `dirname` da ~/.local/bin, REPO sale como ~/.local
+# y todo falla apuntando al sitio equivocado. `readlink -f` no es portable
+# (BSD/macOS no lo tiene); un bucle de `readlink` sí.
 _resolve_self() {
     local src="${BASH_SOURCE[0]}" dir
     while [[ -L "$src" ]]; do
@@ -40,9 +42,9 @@ _resolve_self() {
 
 HERE="$(_resolve_self)"
 SELF="$HERE/$(basename "${BASH_SOURCE[0]}")"
-NAME="botica"
-# REPO es el padre del .d: <repo>/<name>.d/<name>.sh → <repo>
-REPO="${BOTICA_REPO:-$(cd "$HERE/.." && pwd)}"
+REPO="${botica_REPO:-$(cd "$HERE/.." && pwd)}"
+EXE="$REPO/botica"
+BIN_DIR="${botica_BIN_DIR:-$HOME/.local/bin}"
 
 # ── salida ───────────────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -57,96 +59,68 @@ err()  { printf '%s✗%s %s\n' "$R" "$N" "$*" >&2; }
 info() { printf '%s·%s %s\n' "$D" "$N" "$*"; }
 step() { printf '\n%s== %s ==%s\n' "$B" "$*" "$N"; }
 
-# -----------------------------------------------------------------------------
-# Preflight: mix tiene que existir.
-#
-# Los shims de asdf van al PATH si faltan: sin ellos, `mix` no resuelve aunque
-# Erlang y Elixir estén instalados, y el fallo dice "command not found", que
-# apunta al sitio equivocado.
-# -----------------------------------------------------------------------------
-preflight() {
-    case ":$PATH:" in
-        *":$HOME/.asdf/shims:"*) ;;
-        *)
-            if [[ -d "$HOME/.asdf/shims" ]]; then
-                info "shims de asdf no estaban en el PATH; se añaden para esta ejecución"
-                PATH="$HOME/.asdf/shims:$PATH"
-            fi
-            ;;
-    esac
 
+require_mix() {
+    if ! command -v mix >/dev/null 2>&1 && [[ -d "$HOME/.asdf/shims" ]]; then
+        PATH="$HOME/.asdf/shims:$PATH"; export PATH
+        info "mix no estaba en el PATH; se añade ~/.asdf/shims"
+    fi
     if ! command -v mix >/dev/null 2>&1; then
-        err "mix no está instalado: $NAME no se puede compilar"
-        printf '  %s\n' "solución (asdf):"
-        printf '    %s\n' "git clone https://github.com/asdf-vm/asdf.git ~/.asdf"
-        printf '    %s\n' "source ~/.asdf/asdf.sh   &&   asdf plugin add elixir"
-        printf '    %s\n' "cd $REPO && asdf install"
-        printf '  %s\n' "solución (Homebrew, macOS):"
-        printf '    %s\n' "brew install erlang elixir"
+        err "no encuentro \`mix\` en el PATH"
+        printf '  %s\n' "botica se compila con Elixir/mix. Instálalos, p. ej.:"
+        printf '  %s\n' "  · asdf:  cd \"$REPO\" && asdf install   (usa .tool-versions)"
+        printf '  %s\n' "  · brew:  brew install erlang elixir"
         return 1
     fi
-
+    if ! mix --version >/dev/null 2>&1; then
+        err "\`mix\` no arranca: falta la versión de Erlang/Elixir del proyecto"
+        printf '  %s\n' "  cd \"$REPO\" && asdf install   # instala lo de .tool-versions"
+        return 1
+    fi
+    info "$(mix --version 2>/dev/null | head -1)"
     return 0
 }
-
-# El repo tiene que ser un proyecto mix. No es "falta herramienta": es que este
-# .sh no está donde debería, y eso es un fallo, no un préstamo.
-check_project() {
-    if [[ -f "$REPO/mix.exs" ]]; then
-        return 0
-    fi
-    err "no hay mix.exs en $REPO"
-    info "  ¿está $NAME.d en su sitio dentro del repo?"
+ 
+ # raíz del repo; si no está (build antiguo u otro layout), buscamos en _build.
+find_botica_exe() {
+    local cand="$REPO/botica" found
+    [[ -f "$cand" ]] && { printf '%s\n' "$cand"; return 0; }
+    [[ -d "$REPO/_build" ]] || return 1
+    found="$(find "$REPO/_build" -type f -name botica 2>/dev/null | head -1)"
+    [[ -n "$found" ]] && { printf '%s\n' "$found"; return 0; }
     return 1
-}
-
-# Corre mix en silencio y, si falla, saca las últimas 20 líneas.
-#
-# Veinte, no todas: la traza de compilación de Elixir entera son cientos de
-# líneas y el error útil ("undefined function", "could not find dependency")
-# está siempre al final.
-run_mix() {
-    local out rc
-    out=$(cd "$REPO" && "$@" 2>&1)
-    rc=$?
-    if (( rc != 0 )); then
-        printf '%s\n' "$out" | tail -20 >&2
-    fi
-    return $rc
 }
 
 # ── --install ────────────────────────────────────────────────────────────────
 do_install() {
     step "Preflight"
-    if ! preflight; then
-        err ""
-        err "No se continúa: $NAME necesita mix (Elixir) para compilarse."
-        return 3
-    fi
-    check_project || return 1
-    info "elixir $(elixir --version 2>/dev/null | tail -1 | sed 's/^Elixir //')"
-    info "repos  $REPO"
+    require_mix || return 3
 
-    step "Dependencias"
-    if ! run_mix mix deps.get; then
-        err "mix deps.get falló"
-        err "  lo normal: una dependencia privada sin acceso de lectura"
-        err "  ssh -T git@github.com   # debe responder: Hi <usuario>!"
+    step "Compilar y empaquetar (MIX_ENV=prod mix gen)"
+    info "en $REPO: clean_build · deps.get · compile · batamanta. Puede tardar…"
+    local log rc
+    
+    asdf set elixir 1.19.5-otp-28
+    asdf set erlang 28.5.0.7 
+
+    (cd "$REPO" && MIX_ENV=prod mix gen 2>&1) && ok "Compilado y empaquetado" || error "Hubo problemas al compilar"
+
+    step "Localizar ejecutable"
+    local exe
+    if ! exe="$(find_botica_exe)"; then
+        err "no encuentro el ejecutable \`botica\`"
+        printf '  %s\n' "buscado en: $REPO/botica y $REPO/_build/**/botica"
         return 1
     fi
-    ok "dependencias descargadas"
 
-    step "Compilación"
-    if ! run_mix mix compile; then
-        err "mix compile falló"
-        return 1
-    fi
-    ok "compilado"
+    ok "$EXE"
 
-    # Sin ejecutable ni symlink: es una librería. Se dice, para que nadie
-    # espere un binario que esta variante no crea por diseño.
-    step "Verificación"
-    do_check
+    step "Enlazar en $BIN_DIR"
+    chmod +x "$EXE" 2>/dev/null || true
+    mkdir -p "$BIN_DIR"
+    ln -sfn "$EXE" "$BIN_DIR/botica" && ok "$BIN_DIR/botica -> $EXE" || error "No se hizo el symlink correctamente"
+    
+    return 0
 }
 
 # ── --check ──────────────────────────────────────────────────────────────────
@@ -154,30 +128,46 @@ do_check() {
     local fails=0
 
     step "Toolchain"
-    if ! preflight; then
-        err "$NAME no puede compilarse sin mix"
-        return 3
-    fi
-    ok "mix $(mix --version 2>/dev/null | head -1)"
+    require_mix || return 3
 
-    step "Proyecto"
-    if check_project; then
-        ok "mix.exs encontrado ($REPO)"
+    step "Compilar"
+    local log rc
+    log="$(cd "$REPO" && mix deps.get && mix compile 2>&1)"; rc=$?
+    if (( rc == 0 )); then
+        ok "mix compile OK"
     else
+        err "\`mix compile\` falló (exit $rc)"
+        printf '%s\n' "$log" | tail -20 | sed 's/^/    /'
         fails=$((fails + 1))
     fi
 
-    step "Compilación"
-    if run_mix mix compile; then
-        ok "compila"
+    step "Symlink"
+    local link="$BIN_DIR/botica"
+    if [[ -L "$link" ]]; then
+        if [[ -x "$link" ]]; then
+            ok "$link -> $(readlink "$link")"
+        else
+            err "$link es symlink pero no resuelve a un ejecutable"
+            fails=$((fails + 1))
+        fi
     else
-        err "mix compile falló"
+        err "no hay symlink en $link (¿falta \`botica.sh --install\`?)"
         fails=$((fails + 1))
+    fi
+
+    step "Ejecución"
+    if [[ -x "$link" ]]; then
+        if smoke_botica "$link"; then
+            ok "botica --version/--help responde (exit 0)"
+        else
+            err "botica no responde a --version ni a --help"
+            fails=$((fails + 1))
+        fi
     fi
 
     step "Resumen"
     if (( fails == 0 )); then
-        ok "$NAME compila correctamente (librería: no hay binario que enlazar)"
+        ok "botica está correctamente instalado"
         return 0
     fi
     err "$fails comprobación(es) fallida(s)"
@@ -185,36 +175,25 @@ do_check() {
 }
 
 usage() {
-    cat <<EOF
-$NAME — librería Elixir
+    cat <<'EOF'
+botica — CLI Elixir (escript) para declarar y ejecutar peticiones HTTP
 
-  Es una librería, NO un ejecutable: este script compila el código dentro del
-  repo y no crea ni enlaza nada en ~/.local/bin. Lo consume, como dependencia,
-  quien la declara en su mix.exs.
+  botica.sh --install    Compila y empaqueta (MIX_ENV=prod mix gen) y deja un
+                       symlink `botica` en ~/.local/bin. Idempotente.
+  botica.sh --check      Verifica sin reinstalar: toolchain, mix compile, symlink
+                       y que el binario responda a --version/--help.
+  botica.sh --help       Esta ayuda.
 
-USO:
-  bash $SELF --install   mix deps.get + mix compile (idempotente)
-  bash $SELF --check     verifica que compila, sin tocar nada
-  bash $SELF --help      esta ayuda
+  botica_BIN_DIR   Directorio del symlink (default ~/.local/bin).
+  botica_REPO      Raíz del repo botica (default: directorio padre de botica.d).
 
-VARIABLES DE ENTORNO:
-  BOTICA_REPO        raíz del repo (default: padre de este .d)
-
-CÓDIGOS DE SALIDA:
-  0  ok
-  1  fallo (deps, compilación o mix.exs ausente)
-  2  opción desconocida
-  3  falta herramienta (mix / Elixir no están)
+Códigos de salida: 0 ok · 1 fallo · 2 opción desconocida · 3 falta mix.
 EOF
 }
 
 case "${1:-}" in
-    --install) do_install ;;
-    --check)   do_check ;;
-    --help|-h) usage ;;
-    *)
-        err "opción desconocida: ${1:-<ninguna>}"
-        usage
-        exit 2
-        ;;
+    --install|-i) do_install; exit $? ;;
+    --check)      do_check;   exit $? ;;
+    --help|-h|"") usage;      exit 0 ;;
+    *)            err "opción desconocida: $1"; usage; exit 2 ;;
 esac
