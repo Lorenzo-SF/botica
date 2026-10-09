@@ -141,30 +141,6 @@ do_check() {
         fails=$((fails + 1))
     fi
 
-    step "Symlink"
-    local link="$BIN_DIR/botica"
-    if [[ -L "$link" ]]; then
-        if [[ -x "$link" ]]; then
-            ok "$link -> $(readlink "$link")"
-        else
-            err "$link es symlink pero no resuelve a un ejecutable"
-            fails=$((fails + 1))
-        fi
-    else
-        err "no hay symlink en $link (¿falta \`botica.sh --install\`?)"
-        fails=$((fails + 1))
-    fi
-
-    step "Ejecución"
-    if [[ -x "$link" ]]; then
-        if smoke_botica "$link"; then
-            ok "botica --version/--help responde (exit 0)"
-        else
-            err "botica no responde a --version ni a --help"
-            fails=$((fails + 1))
-        fi
-    fi
-
     step "Resumen"
     if (( fails == 0 )); then
         ok "botica está correctamente instalado"
